@@ -1,0 +1,18 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.env
+.env.local
+
+# Leftover nested repo from old project name — must not be committed
+brain-brawl/
+
+# macOS
+.DS_Store
+
+# native
+ios/
+android/
+*.orig.*
