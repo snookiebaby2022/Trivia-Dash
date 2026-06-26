@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { REACTION_EMOJIS, type ReactionEmoji } from '../lib/reactions';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   onReact: (emoji: ReactionEmoji) => void;
   disabled?: boolean;
 }
 
-export function ReactionBar({ onReact, disabled }: Props) {
+export function ReactionBar({onReact, disabled }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>React</Text>
@@ -29,7 +34,8 @@ export function ReactionBar({ onReact, disabled }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     backgroundColor: colors.bgElevated,
     borderRadius: radius.md,
@@ -65,4 +71,5 @@ const styles = StyleSheet.create({
   emoji: {
     fontSize: 22,
   },
-});
+  });
+}

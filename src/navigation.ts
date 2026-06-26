@@ -1,5 +1,6 @@
 import type {
   BotDifficulty,
+  Category,
   Competitor,
   MatchMode,
   MatchSummary,
@@ -9,7 +10,16 @@ import type {
 
 export type RootStackParamList = {
   Home: undefined;
+  Settings: undefined;
   Achievements: undefined;
+  WedgeProfile: { category?: Category } | undefined;
+  CategoryPractice: { category?: Category } | undefined;
+  SeasonPass: undefined;
+  FriendParty: undefined;
+  DailyLeaderboard: undefined;
+  UgcPacks: undefined;
+  VoicePacks: undefined;
+  UnlockFeatures: undefined;
   PassPlaySetup: undefined;
   PassPlayGame: {
     players: PassPlayPlayer[];
@@ -41,6 +51,11 @@ export type RootStackParamList = {
     opponent?: OpponentInfo;
     isOnline?: boolean;
     partySize?: number;
+    category?: Category;
+    botDifficulty?: BotDifficulty;
+    friendCode?: string;
+    ugcPackId?: string;
+    ugcPackTitle?: string;
   };
   Result: { summary: MatchSummary };
   Leaderboard: undefined;

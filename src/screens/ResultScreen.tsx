@@ -1,9 +1,11 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../components/PrimaryButton';
+import { SeasonXpModal } from '../components/SeasonXpModal';
 import { AvatarView } from '../components/AvatarView';
 import { AdBanner } from '../components/AdBanner';
 import { MilestoneBanner } from '../components/MilestoneBanner';
@@ -18,46 +20,60 @@ import {
   shouldShowInterstitial,
 } from '../lib/monetization';
 import { shareMatchResult } from '../lib/share';
+import { getResultPresentation } from '../lib/resultCopy';
 import { speakLine } from '../lib/speech';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Result'>;
 
-export function ResultScreen({ navigation, route }: Props) {
+export function ResultScreen({navigation, route }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { summary } = route.params;
   const { profile } = useProfile();
   const [matchCount, setMatchCount] = useState(0);
+  const [showSeasonXp, setShowSeasonXp] = useState(Boolean(summary.seasonXp));
   const celebrated = useRef(false);
 
   useEffect(() => {
     void recordMatchCompleted().then(setMatchCount);
   }, []);
 
+  const presentation = getResultPresentation(summary, colors);
+
   useEffect(() => {
-    if (celebrated.current || summary.outcome !== 'win') return;
+    if (celebrated.current) return;
     celebrated.current = true;
 
     const milestones = summary.milestones ?? [];
-    void playCelebration(milestones.length > 0);
+    void playCelebration(
+      milestones.length > 0 ||
+        summary.outcome === 'win' ||
+        presentation.headline === 'SURVEY SAYS…'
+    );
+
+    if (!profile?.voiceEnabled) return;
 
     const allHighlights = [
       ...(summary.milestones ?? []),
       ...(summary.achievementUnlocks ?? []),
     ];
-    if (profile?.voiceEnabled && allHighlights.length > 0) {
+    if (allHighlights.length > 0) {
       const top = allHighlights[0];
       void speakLine(`${top.emoji} ${top.label}`, {
         preset: profile.voicePreset,
         enabled: true,
       });
-    } else if (profile?.voiceEnabled) {
-      void speakLine('Victory!', {
-        preset: profile.voicePreset,
-        enabled: true,
-      });
+      return;
     }
-  }, [summary, profile]);
+    void speakLine(presentation.voiceLine, {
+      preset: profile.voicePreset,
+      enabled: true,
+    });
+  }, [summary, profile, presentation.voiceLine]);
 
   const maybeShowInterstitial = useCallback(async (): Promise<void> => {
     if (!profile || profile.isPro) return;
@@ -86,29 +102,38 @@ export function ResultScreen({ navigation, route }: Props) {
     });
   }, [maybeShowInterstitial, navigation, summary.mode]);
   const win = summary.outcome === 'win';
-  const draw = summary.outcome === 'draw';
-  const headline = win ? 'VICTORY' : draw ? 'DRAW' : 'DEFEAT';
-  const headlineColor = win ? colors.success : draw ? colors.warning : colors.danger;
   const rank = rankTitle(summary.newElo);
   const correctCount = summary.rounds.filter((r) => r.correct).length;
   const modeLabel =
     summary.mode === 'daily'
       ? 'Daily · 10 Qs'
+      : summary.mode === 'practice'
+        ? 'Category practice'
       : summary.mode === 'quad'
         ? '4-Player'
         : summary.mode === 'passplay'
           ? 'Pass & Play'
           : summary.mode === 'party'
           ? 'Party Night'
-          : summary.mode === 'quick'
+          : summary.mode === 'quick' || summary.mode === 'ranked'
             ? 'Ranked Duel'
-            : 'Solo';
+            : 'Quick Match';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      {summary.seasonXp && (
+        <SeasonXpModal
+          visible={showSeasonXp}
+          snapshot={summary.seasonXp}
+          onDismiss={() => setShowSeasonXp(false)}
+        />
+      )}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.modeTag}>{modeLabel}{summary.isOnline ? ' · LIVE' : ''}</Text>
-        <Text style={[styles.headline, { color: headlineColor }]}>{headline}</Text>
+        <Text style={[styles.headline, { color: presentation.headlineColor }]}>
+          {presentation.headline}
+        </Text>
+        <Text style={styles.subline}>{presentation.subline}</Text>
 
         {win && summary.milestones && summary.milestones.length > 0 && (
           <MilestoneBanner milestones={summary.milestones} />
@@ -128,7 +153,9 @@ export function ResultScreen({ navigation, route }: Props) {
           <View style={styles.wedgeCard}>
             <WedgeTracker collected={summary.collectedWedges} size="md" />
             <Text style={styles.wedgeCaption}>
-              {summary.collectedWedges.length} of 7 categories locked in
+              {summary.collectedWedges.length > 0
+                ? `New wedge${summary.collectedWedges.length > 1 ? 's' : ''}: ${summary.collectedWedges.join(', ')}`
+                : 'Keep answering to earn category wedges'}
             </Text>
           </View>
         )}
@@ -231,7 +258,8 @@ export function ResultScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -332,11 +360,19 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   headline: {
-    fontSize: 44,
+    fontSize: 40,
     fontWeight: '900',
     textAlign: 'center',
-    letterSpacing: 3,
+    letterSpacing: 2,
+    marginBottom: spacing.xs,
+  },
+  subline: {
+    color: colors.textMuted,
+    fontSize: font.h3,
+    fontWeight: '700',
+    textAlign: 'center',
     marginBottom: spacing.lg,
+    paddingHorizontal: spacing.sm,
   },
   scoreCard: {
     flexDirection: 'row',
@@ -443,4 +479,5 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.md,
   },
-});
+  });
+}

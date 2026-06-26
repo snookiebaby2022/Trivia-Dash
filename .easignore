@@ -1,0 +1,27 @@
+# Keep local secrets out of EAS uploads (use EAS Environment Variables instead)
+.env
+.env.local
+
+# Large binaries / release artifacts
+*.aab
+*.apk
+TriviaDash-*.aab
+triviadash-*.aab
+
+# Store marketing assets (not needed to compile the app)
+store-assets/
+
+# Smoke / export scratch
+dist-smoke-test/
+.expo-tmp-export/
+.expo-tmp-export2/
+
+# Docs & legal hosting (not part of native build)
+docs/
+legal/
+
+# IDE
+.idea/
+
+# Agent / misc
+checksums.txt

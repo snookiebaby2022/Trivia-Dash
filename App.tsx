@@ -1,38 +1,131 @@
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { AuthLinkHandler } from './src/components/AuthLinkHandler';
+import { DevClientGate } from './src/components/DevClientGate';
 import { ProfileProvider } from './src/context/ProfileContext';
+import { ShareCardProvider } from './src/context/ShareCardProvider';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { initAudio } from './src/lib/audio';
-import { getActiveRouteName, syncMenuMusicForRoute } from './src/lib/menuMusicNav';
 import type { RootStackParamList } from './src/navigation';
 import { AchievementWallScreen } from './src/screens/AchievementWallScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PassPlayGameScreen } from './src/screens/PassPlayGameScreen';
 import { PassPlaySetupScreen } from './src/screens/PassPlaySetupScreen';
+import { CategoryPracticeScreen } from './src/screens/CategoryPracticeScreen';
+import { DailyLeaderboardScreen } from './src/screens/DailyLeaderboardScreen';
+import { FriendPartyScreen } from './src/screens/FriendPartyScreen';
 import { LeaderboardScreen } from './src/screens/LeaderboardScreen';
+import { SeasonPassScreen } from './src/screens/SeasonPassScreen';
+import { UgcPacksScreen } from './src/screens/UgcPacksScreen';
+import { VoicePacksScreen } from './src/screens/VoicePacksScreen';
+import { UnlockFeaturesScreen } from './src/screens/UnlockFeaturesScreen';
+import { WedgeProfileScreen } from './src/screens/WedgeProfileScreen';
 import { PartyLobbyScreen } from './src/screens/PartyLobbyScreen';
 import { QuadGameScreen } from './src/screens/QuadGameScreen';
 import { QuadSetupScreen } from './src/screens/QuadSetupScreen';
 import { ResultScreen } from './src/screens/ResultScreen';
-import { colors } from './src/theme';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: colors.bg,
-    card: colors.bg,
-    text: colors.text,
-    border: colors.cardBorder,
-    primary: colors.primary,
-  },
-};
+function AppNavigation() {
+  const { colors, isDark, scheme } = useTheme();
+
+  const navTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      dark: isDark,
+      colors: {
+        ...DefaultTheme.colors,
+        background: colors.bg,
+        card: colors.bg,
+        text: colors.text,
+        border: colors.cardBorder,
+        primary: colors.primary,
+      },
+    }),
+    [colors, isDark]
+  );
+
+  return (
+    <>
+      <AuthLinkHandler />
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <Stack.Navigator
+          key={scheme}
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerTitleStyle: { fontWeight: '800' },
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        >
+          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+          <Stack.Screen
+            name="Achievements"
+            component={AchievementWallScreen}
+            options={{ title: 'Trophy Case' }}
+          />
+          <Stack.Screen
+            name="PassPlaySetup"
+            component={PassPlaySetupScreen}
+            options={{ title: 'Pass & Play' }}
+          />
+          <Stack.Screen
+            name="PassPlayGame"
+            component={PassPlayGameScreen}
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          <Stack.Screen
+            name="QuadSetup"
+            component={QuadSetupScreen}
+            options={{ title: '4-Player' }}
+          />
+          <Stack.Screen
+            name="QuadGame"
+            component={QuadGameScreen}
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          <Stack.Screen
+            name="PartyLobby"
+            component={PartyLobbyScreen}
+            options={{ title: 'Party Lobby' }}
+          />
+          <Stack.Screen
+            name="Game"
+            component={GameScreen}
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          <Stack.Screen
+            name="Result"
+            component={ResultScreen}
+            options={{ headerShown: false, gestureEnabled: false }}
+          />
+          <Stack.Screen name="WedgeProfile" component={WedgeProfileScreen} options={{ title: 'Wedges' }} />
+          <Stack.Screen name="CategoryPractice" component={CategoryPracticeScreen} options={{ title: 'Practice' }} />
+          <Stack.Screen name="SeasonPass" component={SeasonPassScreen} options={{ title: 'Season pass' }} />
+          <Stack.Screen name="FriendParty" component={FriendPartyScreen} options={{ title: 'Friend party' }} />
+          <Stack.Screen name="DailyLeaderboard" component={DailyLeaderboardScreen} options={{ title: 'Daily ranks' }} />
+          <Stack.Screen name="UgcPacks" component={UgcPacksScreen} options={{ title: 'Community packs' }} />
+          <Stack.Screen name="VoicePacks" component={VoicePacksScreen} options={{ title: 'AI voices' }} />
+          <Stack.Screen name="UnlockFeatures" component={UnlockFeaturesScreen} options={{ title: 'Unlock everything' }} />
+          <Stack.Screen
+            name="Leaderboard"
+            component={LeaderboardScreen}
+            options={{ title: 'Leaderboard' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
+  );
+}
 
 export default function App() {
   useEffect(() => {
@@ -40,71 +133,16 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ProfileProvider>
-        <NavigationContainer
-          theme={navTheme}
-          onReady={() => syncMenuMusicForRoute('Home')}
-          onStateChange={(state) => syncMenuMusicForRoute(getActiveRouteName(state))}
-        >
-          <StatusBar style="light" />
-          <Stack.Navigator
-            screenOptions={{
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text,
-              headerTitleStyle: { fontWeight: '800' },
-              contentStyle: { backgroundColor: colors.bg },
-            }}
-          >
-            <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="Achievements"
-              component={AchievementWallScreen}
-              options={{ title: 'Trophy Case' }}
-            />
-            <Stack.Screen
-              name="PassPlaySetup"
-              component={PassPlaySetupScreen}
-              options={{ title: 'Pass & Play' }}
-            />
-            <Stack.Screen
-              name="PassPlayGame"
-              component={PassPlayGameScreen}
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
-            <Stack.Screen
-              name="QuadSetup"
-              component={QuadSetupScreen}
-              options={{ title: '4-Player' }}
-            />
-            <Stack.Screen
-              name="QuadGame"
-              component={QuadGameScreen}
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
-            <Stack.Screen
-              name="PartyLobby"
-              component={PartyLobbyScreen}
-              options={{ title: 'Party Lobby' }}
-            />
-            <Stack.Screen
-              name="Game"
-              component={GameScreen}
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
-            <Stack.Screen
-              name="Result"
-              component={ResultScreen}
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
-            <Stack.Screen
-              name="Leaderboard"
-              component={LeaderboardScreen}
-              options={{ title: 'Leaderboard' }}
-            />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </ProfileProvider>
-    </SafeAreaProvider>
+    <DevClientGate>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ProfileProvider>
+            <ShareCardProvider>
+              <AppNavigation />
+            </ShareCardProvider>
+          </ProfileProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </DevClientGate>
   );
 }

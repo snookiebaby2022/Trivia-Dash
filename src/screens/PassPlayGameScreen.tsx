@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarView } from '../components/AvatarView';
@@ -19,10 +20,13 @@ import {
 import { finalizeProfileAfterMatch } from '../lib/achievements';
 import { getCategoryTheme } from '../lib/categoryTheme';
 import { detectMilestones } from '../lib/milestones';
+import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
 import { ROUND_TIME_MS, scoreAnswer } from '../lib/scoring';
 import { speakQuestion, stopSpeaking } from '../lib/speech';
+import { isHarveyStylePack } from '../lib/voiceCatalog';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import type { Category, MatchSummary, PassPlayPlayer, RoundResult } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PassPlayGame'>;
@@ -30,6 +34,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'PassPlayGame'>;
 type Phase = 'countdown' | 'playing';
 
 export function PassPlayGameScreen({ navigation, route }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { players: initialPlayers, questionSeed } = route.params;
   const { profile, update } = useProfile();
 
@@ -142,13 +149,26 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
       cats
     );
 
+    const xpBundle = buildSeasonXpSnapshot(
+      ensureSeasonPass(profile.seasonPass),
+      summaryBase.outcome,
+      profile.isPro,
+      enriched.wins,
+      enriched.losses
+    );
+    const stats = {
+      ...enriched.stats,
+      seasonXp: (enriched.stats.seasonXp ?? 0) + xpBundle.xpGain,
+    };
+
     void update({
       wins: enriched.wins,
       losses: enriched.losses,
       streak: enriched.streak,
       bestStreak: enriched.bestStreak,
       achievementState: enriched.achievementState,
-      stats: enriched.stats,
+      stats,
+      seasonPass: xpBundle.pass,
     });
 
     const milestones = detectMilestones(profile, summaryBase, {
@@ -165,7 +185,7 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
     }));
 
     navigation.replace('Result', {
-      summary: { ...summaryBase, milestones, achievementUnlocks },
+      summary: { ...summaryBase, milestones, achievementUnlocks, seasonXp: xpBundle.snapshot },
     });
   }, [profile, players, collectedWedges, questions, update, navigation]);
 
@@ -194,7 +214,8 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
       if (correct) {
         matchStreak.current += 1;
         void hapticSuccess();
-        const streakFx = streakCelebration(matchStreak.current, q.category);
+        const harvey = profile?.voicePreset ? isHarveyStylePack(profile.voicePreset) : false;
+        const streakFx = streakCelebration(matchStreak.current, q.category, harvey);
         setCollectedWedges((w) => {
           const isNew = !w.includes(q.category);
           if (streakFx) {
@@ -206,7 +227,7 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
               });
             }
           } else if (isNew) {
-            const wedgeFx = wedgeCelebration(q.category);
+            const wedgeFx = wedgeCelebration(q.category, harvey);
             setCelebration(wedgeFx);
             if (profile) {
               void announceCelebration(wedgeFx, {
@@ -293,31 +314,38 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
         </Text>
       </View>
 
-      <WedgeTracker collected={collectedWedges} />
-
       <View style={styles.timerTrack}>
         <Animated.View style={[styles.timerFill, { width: widthInterpolate, backgroundColor: catTheme.fill }]} />
       </View>
 
-      <View style={styles.qWrap}>
-        <TriviaCard
-          category={q.category}
-          prompt={q.prompt}
-          questionNum={index + 1}
-          total={questions.length}
-          year={q.year}
-          tier={q.tier}
-          onSpeak={() =>
-            profile &&
-            void speakQuestion(q.prompt, {
-              preset: profile.voicePreset,
-              enabled: profile.voiceEnabled,
-            })
-          }
-        />
-      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <WedgeTracker collected={collectedWedges} />
 
-      <View style={styles.options}>
+        <View style={styles.qWrap}>
+          <TriviaCard
+            category={q.category}
+            prompt={q.prompt}
+            questionNum={index + 1}
+            total={questions.length}
+            year={q.year}
+            tier={q.tier}
+            compact
+            onSpeak={() =>
+              profile &&
+              void speakQuestion(q.prompt, {
+                preset: profile.voicePreset,
+                enabled: profile.voiceEnabled,
+              })
+            }
+          />
+        </View>
+
+        <View style={styles.options}>
         {q.options.map((opt, i) => {
           const isSelected = selected === i;
           const reveal = locked;
@@ -347,16 +375,24 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
             </Pressable>
           );
         })}
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
     paddingHorizontal: spacing.lg,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
   },
   center: {
     flex: 1,
@@ -412,16 +448,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   qWrap: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   options: {
     gap: spacing.sm,
-    marginTop: 'auto',
-    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
   },
   option: {
-    minHeight: 56,
+    minHeight: 52,
     borderRadius: radius.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -440,4 +475,5 @@ const styles = StyleSheet.create({
     fontSize: font.body,
     fontWeight: '700',
   },
-});
+  });
+}

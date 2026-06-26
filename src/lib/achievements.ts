@@ -1,3 +1,5 @@
+import { CATEGORY_LIST } from './categoryTheme';
+import { countEarnedWedges, WEDGE_UNLOCK_CORRECT } from './wedges';
 import type {
   AchievementState,
   AvatarBadge,
@@ -11,15 +13,31 @@ export type AchievementId =
   | 'first_win'
   | 'wins_5'
   | 'wins_10'
+  | 'wins_25'
   | 'streak_3'
   | 'streak_5'
+  | 'streak_10'
   | 'perfect_game'
   | 'all_wedges'
+  | 'wedges_3'
+  | 'wedges_6'
   | 'daily_7'
+  | 'daily_30'
   | 'party_champion'
+  | 'party_5'
   | 'matches_10'
+  | 'matches_50'
   | 'science_savvy'
-  | 'pass_play_champ';
+  | 'history_buff'
+  | 'geo_guru'
+  | 'pop_culture_fan'
+  | 'correct_100'
+  | 'correct_500'
+  | 'elo_1200'
+  | 'pass_play_champ'
+  | 'pass_play_5'
+  | 'quad_winner'
+  | 'speed_round';
 
 export interface AchievementDef {
   id: AchievementId;
@@ -56,6 +74,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     reward: { frame: 'silver' },
   },
   {
+    id: 'wins_25',
+    label: 'Hall of Fame',
+    emoji: '🏛️',
+    description: 'Reach 25 career wins',
+    target: 25,
+    reward: { frame: 'gold' },
+  },
+  {
     id: 'streak_3',
     label: 'Hot Streak',
     emoji: '🔥',
@@ -80,11 +106,27 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     reward: { badge: 'gem' },
   },
   {
+    id: 'wedges_3',
+    label: 'Triple Threat',
+    emoji: '🎯',
+    description: `Earn 3 category wedges (${WEDGE_UNLOCK_CORRECT} correct each)`,
+    target: 3,
+    reward: { badge: 'bolt' },
+  },
+  {
+    id: 'wedges_6',
+    label: 'Half the Pie',
+    emoji: '🥧',
+    description: `Earn 6 category wedges (${WEDGE_UNLOCK_CORRECT} correct each)`,
+    target: 6,
+    reward: { frame: 'neon' },
+  },
+  {
     id: 'all_wedges',
     label: 'Rainbow Brain',
     emoji: '🌈',
-    description: 'Collect all 7 category wedges in one match',
-    target: 1,
+    description: `Earn every category wedge (${WEDGE_UNLOCK_CORRECT} correct each)`,
+    target: CATEGORY_LIST.length,
     reward: { frame: 'star' },
   },
   {
@@ -96,12 +138,28 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     reward: { badge: 'party' },
   },
   {
+    id: 'daily_30',
+    label: 'Monthly Maven',
+    emoji: '🗓️',
+    description: 'Reach a 30-day daily streak',
+    target: 30,
+    reward: { badge: 'gem' },
+  },
+  {
     id: 'party_champion',
     label: 'Party Legend',
     emoji: '🎉',
     description: 'Finish #1 in a party match',
     target: 1,
     reward: { badge: 'crown' },
+  },
+  {
+    id: 'party_5',
+    label: 'Life of the Party',
+    emoji: '🪩',
+    description: 'Win 5 party matches',
+    target: 5,
+    reward: { badge: 'party' },
   },
   {
     id: 'matches_10',
@@ -112,12 +170,68 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     reward: { frame: 'gold' },
   },
   {
+    id: 'matches_50',
+    label: 'Marathon Mind',
+    emoji: '🧠',
+    description: 'Play 50 matches',
+    target: 50,
+    reward: { badge: 'trophy' },
+  },
+  {
     id: 'science_savvy',
     label: 'Lab Coat',
     emoji: '🔬',
-    description: 'Answer 10 Science questions correctly (lifetime)',
-    target: 10,
+    description: `Earn the Science wedge (${WEDGE_UNLOCK_CORRECT} correct)`,
+    target: WEDGE_UNLOCK_CORRECT,
     reward: { badge: 'star' },
+  },
+  {
+    id: 'history_buff',
+    label: 'Time Traveler',
+    emoji: '📜',
+    description: `Earn the History wedge (${WEDGE_UNLOCK_CORRECT} correct)`,
+    target: WEDGE_UNLOCK_CORRECT,
+    reward: { frame: 'classic' },
+  },
+  {
+    id: 'geo_guru',
+    label: 'Globe Trotter',
+    emoji: '🌍',
+    description: `Earn the Geography wedge (${WEDGE_UNLOCK_CORRECT} correct)`,
+    target: WEDGE_UNLOCK_CORRECT,
+    reward: { badge: 'fire' },
+  },
+  {
+    id: 'pop_culture_fan',
+    label: 'Trend Setter',
+    emoji: '📱',
+    description: `Earn the Pop Culture wedge (${WEDGE_UNLOCK_CORRECT} correct)`,
+    target: WEDGE_UNLOCK_CORRECT,
+    reward: { badge: 'bolt' },
+  },
+  {
+    id: 'correct_100',
+    label: 'Century Club',
+    emoji: '💯',
+    description: 'Answer 100 questions correctly (lifetime)',
+    target: 100,
+    reward: { frame: 'silver' },
+  },
+  {
+    id: 'correct_500',
+    label: 'Trivia Titan',
+    emoji: '⚡',
+    description: 'Answer 500 questions correctly (lifetime)',
+    target: 500,
+    reward: { frame: 'gold' },
+  },
+  {
+    id: 'elo_1200',
+    label: 'Rank Climber',
+    emoji: '📈',
+    description: 'Reach 1200 ELO',
+    target: 1200,
+    reward: { badge: 'crown' },
   },
   {
     id: 'pass_play_champ',
@@ -127,16 +241,30 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     target: 1,
     reward: { frame: 'classic' },
   },
-];
-
-const ALL_CATEGORIES: Category[] = [
-  'General',
-  'Science',
-  'History',
-  'Geography',
-  'Sports',
-  'Entertainment',
-  'Pop Culture',
+  {
+    id: 'pass_play_5',
+    label: 'Sofa Dynasty',
+    emoji: '🛋️',
+    description: 'Win 5 pass-and-play matches',
+    target: 5,
+    reward: { badge: 'party' },
+  },
+  {
+    id: 'quad_winner',
+    label: 'Quad Dominator',
+    emoji: '4️⃣',
+    description: 'Win a 4-player match',
+    target: 1,
+    reward: { badge: 'gem' },
+  },
+  {
+    id: 'speed_round',
+    label: 'Lightning Round',
+    emoji: '⚡',
+    description: 'Answer 5 questions correctly under 5s each in one match',
+    target: 1,
+    reward: { badge: 'bolt' },
+  },
 ];
 
 export function defaultAchievementState(): AchievementState {
@@ -152,8 +280,14 @@ export function defaultProfileStats(): Profile['stats'] {
     matchesPlayed: 0,
     totalCorrect: 0,
     categoryCorrect: {},
+    categoryPlays: {},
     partyWins: 0,
     passPlayWins: 0,
+    quadWins: 0,
+    seasonXp: 0,
+    dailyBests: {},
+    practiceCountToday: 0,
+    dailyReminderEnabled: true,
   };
 }
 
@@ -162,26 +296,50 @@ function progressFor(id: AchievementId, profile: Profile, summary?: MatchSummary
     case 'first_win':
     case 'wins_5':
     case 'wins_10':
+    case 'wins_25':
       return profile.wins;
     case 'streak_3':
     case 'streak_5':
+    case 'streak_10':
       return profile.streak;
     case 'daily_7':
       return profile.dailyStreak;
     case 'matches_10':
+    case 'matches_50':
       return profile.stats.matchesPlayed;
+    case 'wedges_3':
+    case 'wedges_6':
+    case 'all_wedges':
+      return countEarnedWedges(profile);
+    case 'daily_30':
+      return profile.dailyStreak;
+    case 'party_champion':
+    case 'party_5':
+      return profile.stats.partyWins;
     case 'science_savvy':
       return profile.stats.categoryCorrect.Science ?? 0;
-    case 'party_champion':
-      return profile.stats.partyWins;
+    case 'history_buff':
+      return profile.stats.categoryCorrect.History ?? 0;
+    case 'geo_guru':
+      return profile.stats.categoryCorrect.Geography ?? 0;
+    case 'pop_culture_fan':
+      return profile.stats.categoryCorrect['Pop Culture'] ?? 0;
+    case 'correct_100':
+    case 'correct_500':
+      return profile.stats.totalCorrect;
+    case 'elo_1200':
+      return profile.elo;
     case 'pass_play_champ':
+    case 'pass_play_5':
       return profile.stats.passPlayWins;
+    case 'quad_winner':
+      return profile.stats.quadWins ?? 0;
     case 'perfect_game':
-      if (!summary || summary.outcome !== 'win') return 0;
+      if (!summary) return 0;
       return summary.rounds.length > 0 && summary.rounds.every((r) => r.correct) ? 1 : 0;
-    case 'all_wedges':
-      if (!summary || summary.outcome !== 'win') return 0;
-      return (summary.collectedWedges?.length ?? 0) >= ALL_CATEGORIES.length ? 1 : 0;
+    case 'speed_round':
+      if (!summary) return 0;
+      return summary.rounds.filter((r) => r.correct && r.ms < 5000).length >= 5 ? 1 : 0;
     default:
       return 0;
   }
@@ -255,7 +413,10 @@ export function bumpMatchStats(
   profile: Profile,
   summary: MatchSummary,
   correctCategories: Category[]
-): Profile {
+): { profile: Profile; newWedges: Category[] } {
+  const beforeSet = new Set(
+    CATEGORY_LIST.filter((c) => (profile.stats.categoryCorrect[c] ?? 0) >= WEDGE_UNLOCK_CORRECT)
+  );
   const categoryCorrect = { ...profile.stats.categoryCorrect };
   for (const cat of correctCategories) {
     categoryCorrect[cat] = (categoryCorrect[cat] ?? 0) + 1;
@@ -263,10 +424,12 @@ export function bumpMatchStats(
 
   let partyWins = profile.stats.partyWins;
   let passPlayWins = profile.stats.passPlayWins;
+  let quadWins = profile.stats.quadWins ?? 0;
   if (summary.mode === 'party' && summary.partyRank === 1) partyWins += 1;
   if (summary.mode === 'passplay' && summary.partyRank === 1) passPlayWins += 1;
+  if (summary.mode === 'quad' && summary.partyRank === 1) quadWins += 1;
 
-  return {
+  const next: Profile = {
     ...profile,
     stats: {
       ...profile.stats,
@@ -275,26 +438,13 @@ export function bumpMatchStats(
       categoryCorrect,
       partyWins,
       passPlayWins,
+      quadWins,
     },
   };
-}
-
-export function bumpCategoryCorrect(
-  profile: Profile,
-  categories: Category[]
-): Profile {
-  const categoryCorrect = { ...profile.stats.categoryCorrect };
-  for (const cat of categories) {
-    categoryCorrect[cat] = (categoryCorrect[cat] ?? 0) + 1;
-  }
-  return {
-    ...profile,
-    stats: {
-      ...profile.stats,
-      totalCorrect: profile.stats.totalCorrect + categories.length,
-      categoryCorrect,
-    },
-  };
+  const newWedges = CATEGORY_LIST.filter(
+    (c) => !beforeSet.has(c) && (categoryCorrect[c] ?? 0) >= WEDGE_UNLOCK_CORRECT
+  );
+  return { profile: next, newWedges };
 }
 
 export function finalizeProfileAfterMatch(
@@ -302,11 +452,11 @@ export function finalizeProfileAfterMatch(
   patch: Partial<Profile>,
   summary: MatchSummary,
   correctCategories: Category[]
-): AchievementUnlockResult & { achievementUnlocks: AchievementDef[] } {
+): AchievementUnlockResult & { achievementUnlocks: AchievementDef[]; newWedges: Category[] } {
   let next = { ...profile, ...patch };
-  next = bumpMatchStats(next, summary, correctCategories);
-  const result = syncAchievements(next, summary);
-  return { ...result, achievementUnlocks: result.newlyUnlocked };
+  const { profile: withStats, newWedges } = bumpMatchStats(next, summary, correctCategories);
+  const result = syncAchievements(withStats, summary);
+  return { ...result, achievementUnlocks: result.newlyUnlocked, newWedges };
 }
 
 export function isCosmeticUnlocked(

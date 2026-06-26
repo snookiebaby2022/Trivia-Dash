@@ -1,6 +1,21 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { initAds, showRewardedAd } from '../lib/ads';
+import {
+  type AuthUser,
+  authUserFromSession,
+  fetchRemoteProfile,
+  getAuthSession,
+  mergeProfileWithAuth,
+  signInWithApple as appleSignIn,
+  signInWithEmail as emailSignIn,
+  signInWithFacebook as facebookSignIn,
+  signInWithGoogle as googleSignIn,
+  signUpWithEmail as emailSignUp,
+  signOut as authSignOut,
+  subscribeToAuthChanges,
+} from '../lib/auth';
 import {
   applyDailyExtraPlay,
   applyStreakShield,
@@ -11,6 +26,7 @@ import {
 import {
   initPurchases,
   isProEntitled,
+  loginRevenueCatUser,
   presentCustomerCenter,
   presentProPaywall,
   purchaseProSubscription,
@@ -19,28 +35,57 @@ import {
   syncProFromStore,
 } from '../lib/purchases';
 import { loadProfile, saveProfile } from '../lib/storage';
+import { pickAndPersistProfileImage, removePersistedImage } from '../lib/profilePhotos';
 import { syncProfile } from '../lib/leaderboard';
 import type { AvatarConfig, Profile, VoicePreset } from '../types';
 
 interface ProfileContextValue {
   profile: Profile | null;
   loading: boolean;
+  authUser: AuthUser | null;
+  isSignedIn: boolean;
+  authBusy: boolean;
+  applyAuthUser: (user: AuthUser) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  /** @deprecated Use signOut */
+  signOutGoogle: () => Promise<void>;
   update: (patch: Partial<Profile>) => Promise<void>;
   setUsername: (name: string) => Promise<void>;
   setAvatar: (avatar: AvatarConfig) => Promise<void>;
   setVoicePreset: (preset: VoicePreset) => Promise<void>;
   setVoiceEnabled: (enabled: boolean) => Promise<void>;
-  /** Opens RevenueCat Paywall (preferred). Falls back to direct purchase in dev. */
+  setProfilePhoto: () => Promise<void>;
+  setCoverPhoto: () => Promise<void>;
+  removeProfilePhoto: () => Promise<void>;
+  removeCoverPhoto: () => Promise<void>;
   showProPaywall: () => Promise<boolean>;
-  /** Legacy direct purchase — monthly package. */
   purchasePro: () => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
-  /** RevenueCat Customer Center — manage/cancel subscription. */
   manageSubscription: () => Promise<void>;
   watchRewardedAd: (placement: RewardedPlacement) => Promise<boolean>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
+
+/** Prevent infinite splash if Supabase/RevenueCat network calls hang. */
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function applyProStatus(prev: Profile, isPro: boolean): Profile {
   return {
@@ -53,45 +98,189 @@ function applyProStatus(prev: Profile, isPro: boolean): Profile {
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+
+  const applyAuthUser = useCallback(async (user: AuthUser) => {
+    setAuthUser(user);
+    const remote = await fetchRemoteProfile(user.id);
+    const storePro = await syncProFromStore();
+
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const merged = mergeProfileWithAuth(prev, user, remote);
+      const next = applyProStatus(merged, storePro || merged.isPro);
+      void saveProfile(next);
+      void syncProfile(next);
+      void loginRevenueCatUser(user.id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     void initAds();
-    loadProfile().then(async (p) => {
-      if (!mounted) return;
 
-      await initPurchases(p.id, (customerInfo) => {
+    const boot = async () => {
+      try {
+        const p = await loadProfile();
         if (!mounted) return;
-        const active = isProEntitled(customerInfo);
-        void saveProStatus(active);
+
+        const session = await withTimeout(getAuthSession(), 8000, null);
+        let user: AuthUser | null = null;
+        let nextProfile = p;
+
+        if (session) {
+          user = authUserFromSession(session);
+          const remote = await withTimeout(fetchRemoteProfile(user.id), 8000, null);
+          nextProfile = mergeProfileWithAuth(p, user, remote);
+        }
+
+        await initPurchases(nextProfile.id, (customerInfo) => {
+          if (!mounted) return;
+          const active = isProEntitled(customerInfo);
+          void saveProStatus(active);
+          setProfile((prev) => {
+            if (!prev) return prev;
+            if (prev.isPro === active) return prev;
+            const next = applyProStatus(prev, active);
+            void saveProfile(next);
+            void syncProfile(next);
+            return next;
+          });
+        });
+
+        const storePro = await withTimeout(syncProFromStore(), 5000, false);
+        nextProfile = applyProStatus(nextProfile, storePro || nextProfile.isPro);
+
+        if (user) {
+          setAuthUser(user);
+          void loginRevenueCatUser(user.id);
+        }
+
+        setProfile(nextProfile);
+        void syncProfile(nextProfile);
+      } catch (e) {
+        console.warn('[profile] boot failed', e);
+        const fallback = await loadProfile();
+        if (mounted) setProfile(fallback);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    void boot();
+
+    const unsubAuth = subscribeToAuthChanges((user) => {
+      if (!mounted) return;
+      setAuthUser(user);
+      if (!user) {
         setProfile((prev) => {
           if (!prev) return prev;
-          if (prev.isPro === active) return prev;
-          const next = applyProStatus(prev, active);
+          const next = { ...prev, authProvider: undefined, email: undefined };
           void saveProfile(next);
-          void syncProfile(next);
           return next;
         });
-      });
-
-      const storePro = await syncProFromStore();
-      const next = storePro ? applyProStatus(p, true) : applyProStatus(p, p.isPro);
-      setProfile(next);
-      setLoading(false);
-      void syncProfile(next);
+      }
     });
 
     return () => {
       mounted = false;
       removePurchasesListener();
+      unsubAuth?.();
     };
   }, []);
+
+  const completeSignIn = useCallback(
+    async (user: AuthUser | null) => {
+      if (!user) return;
+      await applyAuthUser(user);
+      setAuthUser(user);
+    },
+    [applyAuthUser]
+  );
+
+  const runAuth = useCallback(
+    async (action: () => Promise<AuthUser | null>, failureTitle: string) => {
+      setAuthBusy(true);
+      try {
+        const user = await action();
+        await completeSignIn(user);
+      } catch (e) {
+        console.warn(`[auth] ${failureTitle}`, e);
+        const message = e instanceof Error ? e.message : 'Try again.';
+        Alert.alert(failureTitle, message);
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [completeSignIn]
+  );
+
+  const signInWithGoogle = useCallback(
+    () => runAuth(googleSignIn, 'Sign-in failed'),
+    [runAuth]
+  );
+
+  const signInWithApple = useCallback(
+    () => runAuth(appleSignIn, 'Apple sign-in failed'),
+    [runAuth]
+  );
+
+  const signInWithFacebook = useCallback(
+    () => runAuth(facebookSignIn, 'Facebook sign-in failed'),
+    [runAuth]
+  );
+
+  const signUpWithEmail = useCallback(
+    (email: string, password: string) =>
+      runAuth(() => emailSignUp(email, password), 'Sign-up failed'),
+    [runAuth]
+  );
+
+  const signInWithEmail = useCallback(
+    (email: string, password: string) =>
+      runAuth(() => emailSignIn(email, password), 'Log-in failed'),
+    [runAuth]
+  );
+
+  const signOut = useCallback(async () => {
+    setAuthBusy(true);
+    try {
+      await authSignOut();
+      setAuthUser(null);
+      setProfile((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, authProvider: undefined, email: undefined };
+        void saveProfile(next);
+        return next;
+      });
+    } catch (e) {
+      console.warn('[auth] sign out failed', e);
+      Alert.alert('Sign-out failed', 'Could not sign out. Try again.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }, []);
+
+  const signOutGoogle = signOut;
 
   const value = useMemo<ProfileContextValue>(
     () => ({
       profile,
       loading,
+      authUser,
+      isSignedIn: Boolean(authUser),
+      authBusy,
+      applyAuthUser,
+      signInWithGoogle,
+      signInWithApple,
+      signInWithFacebook,
+      signUpWithEmail,
+      signInWithEmail,
+      signOut,
+      signOutGoogle,
       update: async (patch) => {
         setProfile((prev) => {
           if (!prev) return prev;
@@ -134,6 +323,56 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           if (!prev) return prev;
           const next = { ...prev, voiceEnabled: enabled };
           void saveProfile(next);
+          return next;
+        });
+      },
+      setProfilePhoto: async () => {
+        const id = profile?.id;
+        if (!id) return;
+        const uri = await pickAndPersistProfileImage(id, 'profile');
+        if (!uri) return;
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, profilePhotoUri: uri };
+          void saveProfile(next);
+          void syncProfile(next);
+          return next;
+        });
+      },
+      setCoverPhoto: async () => {
+        const id = profile?.id;
+        if (!id) return;
+        const uri = await pickAndPersistProfileImage(id, 'cover');
+        if (!uri) return;
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, coverPhotoUri: uri };
+          void saveProfile(next);
+          void syncProfile(next);
+          return next;
+        });
+      },
+      removeProfilePhoto: async () => {
+        const id = profile?.id;
+        if (!id) return;
+        await removePersistedImage(id, 'profile');
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, profilePhotoUri: undefined };
+          void saveProfile(next);
+          void syncProfile(next);
+          return next;
+        });
+      },
+      removeCoverPhoto: async () => {
+        const id = profile?.id;
+        if (!id) return;
+        await removePersistedImage(id, 'cover');
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, coverPhotoUri: undefined };
+          void saveProfile(next);
+          void syncProfile(next);
           return next;
         });
       },
@@ -201,7 +440,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         return true;
       },
     }),
-    [profile, loading]
+    [profile, loading, authUser, authBusy, applyAuthUser, signInWithGoogle, signInWithApple, signInWithFacebook, signUpWithEmail, signInWithEmail, signOut, signOutGoogle]
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
@@ -221,7 +460,7 @@ export function useIsPro(): boolean {
 export function useVoiceSettings() {
   const { profile } = useProfile();
   return {
-    preset: profile?.voicePreset ?? 'host',
-    enabled: profile?.voiceEnabled ?? true,
+    preset: profile?.voicePreset ?? 'harvey',
+    enabled: profile?.voiceEnabled ?? false,
   };
 }

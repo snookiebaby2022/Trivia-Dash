@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ADMOB_BANNER_ID } from '../lib/monetization';
 import { useIsPro } from '../context/ProfileContext';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 /** Banner ad — real unit in dev/production builds; placeholder in Expo Go. */
 export function AdBanner() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const isPro = useIsPro();
   if (isPro) return null;
 
@@ -29,7 +34,8 @@ export function AdBanner() {
   }
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   bannerWrap: {
     alignItems: 'center',
     marginVertical: spacing.sm,
@@ -61,4 +67,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: font.small,
   },
-});
+  });
+}

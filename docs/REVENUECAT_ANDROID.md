@@ -56,8 +56,9 @@ class MyApplication : Application() {
         if (BuildConfig.DEBUG) {
             Purchases.logLevel = LogLevel.DEBUG
         }
+        // Use goog_ production key for release; test_ only for debug sandbox.
         Purchases.configure(
-            PurchasesConfiguration.Builder(this, "test_iAXldqIVnUOynJrZtrpubvDVoAx").build()
+            PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY).build()
         )
     }
 }

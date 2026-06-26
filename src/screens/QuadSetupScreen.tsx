@@ -1,5 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,12 +14,16 @@ import {
 import { isMatchmakingAvailable } from '../lib/matchmaking';
 import { buildOfflineQuad } from '../lib/quad';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import type { BotDifficulty } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'QuadSetup'>;
 
-export function QuadSetupScreen({ navigation }: Props) {
+export function QuadSetupScreen({navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { profile } = useProfile();
   const [online, setOnline] = useState(false);
   const [difficulty, setDifficulty] = useState<BotDifficulty>('medium');
@@ -113,7 +118,8 @@ export function QuadSetupScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
   title: {
@@ -186,4 +192,5 @@ const styles = StyleSheet.create({
     fontSize: font.small,
     textAlign: 'center',
   },
-});
+  });
+}

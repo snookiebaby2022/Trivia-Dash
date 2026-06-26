@@ -2,6 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { AchievementState, AvatarBadge, AvatarFrame, Profile, VoicePreset } from '../types';
 import { todayKey } from './daily';
+import {
+  clampVoicePackId,
+  isPremiumVoicePack,
+  PREMIUM_VOICE_COUNT,
+} from './voiceCatalog';
 
 const PRO_KEY = 'bb.pro.v1';
 const MATCH_COUNT_KEY = 'bb.matches.v1';
@@ -11,8 +16,8 @@ import { RC_PRODUCT_MONTHLY, RC_PRODUCT_YEARLY } from './revenuecat';
 /** Store product IDs — must match RevenueCat / Play Console (`monthly`, `yearly`). */
 export const PRO_PRODUCT_ID = RC_PRODUCT_MONTHLY;
 export const PRO_ANNUAL_ID = RC_PRODUCT_YEARLY;
-export const PRO_PRICE_LABEL = '$3.99/mo';
-export const PRO_ANNUAL_LABEL = '$24.99/yr';
+export const PRO_PRICE_LABEL = '£3.49/mo';
+export const PRO_ANNUAL_LABEL = '£19.99/yr';
 
 export const ADMOB_BANNER_ID = __DEV__
   ? 'ca-app-pub-3940256099942544/6300978111'
@@ -27,8 +32,7 @@ export const ADMOB_REWARDED_ID = __DEV__
 /** Show interstitial every N completed matches (after first session). */
 export const INTERSTITIAL_EVERY_N_MATCHES = 5;
 
-export const FREE_VOICE_PRESETS: VoicePreset[] = ['host', 'scholar'];
-export const PRO_VOICE_PRESETS: VoicePreset[] = ['announcer', 'coach', 'robot'];
+export { PREMIUM_VOICE_COUNT };
 
 export const FREE_FRAMES: AvatarFrame[] = ['none', 'classic'];
 export const PRO_FRAMES: AvatarFrame[] = ['gold', 'silver', 'neon', 'star'];
@@ -39,11 +43,11 @@ export const PRO_BADGES: AvatarBadge[] = ['crown', 'bolt', 'gem', 'trophy', 'par
 export type RewardedPlacement = 'daily_retry' | 'streak_shield';
 
 export function proFeaturesLabel(): string {
-  return '1930–2026 archive · no ads · premium voices · gold frames · party perks';
+  return 'Unlock everything — full archive · no ads · all voices · all cosmetics';
 }
 
 export function isVoiceProLocked(preset: VoicePreset, isPro: boolean): boolean {
-  return !isPro && PRO_VOICE_PRESETS.includes(preset);
+  return !isPro && isPremiumVoicePack(preset);
 }
 
 export function isFrameProLocked(frame: AvatarFrame, isPro: boolean): boolean {
@@ -91,7 +95,7 @@ export function isBadgeLocked(
 }
 
 export function clampVoicePreset(preset: VoicePreset, isPro: boolean): VoicePreset {
-  return isVoiceProLocked(preset, isPro) ? 'host' : preset;
+  return clampVoicePackId(preset, isPro);
 }
 
 export async function loadProStatus(): Promise<boolean> {

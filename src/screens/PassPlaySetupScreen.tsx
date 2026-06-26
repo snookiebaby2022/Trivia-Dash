@@ -1,5 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,14 +8,18 @@ import { AvatarView } from '../components/AvatarView';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { randomAvatar } from '../lib/avatars';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import type { PassPlayPlayer } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PassPlaySetup'>;
 
 const DEFAULT_NAMES = ['Player 1', 'Player 2', 'Player 3', 'Player 4'];
 
-export function PassPlaySetupScreen({ navigation }: Props) {
+export function PassPlaySetupScreen({navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const [players, setPlayers] = useState<PassPlayPlayer[]>(() =>
     DEFAULT_NAMES.slice(0, 2).map((name, i) => ({
       id: `local_${i}`,
@@ -96,7 +101,8 @@ export function PassPlaySetupScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -153,4 +159,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: font.small,
   },
-});
+  });
+}

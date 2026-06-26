@@ -1,15 +1,20 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import type { CelebrationPayload } from '../lib/celebrations';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   payload: CelebrationPayload | null;
   onDone?: () => void;
 }
 
-export function MatchCelebrationOverlay({ payload, onDone }: Props) {
+export function MatchCelebrationOverlay({payload, onDone }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.85)).current;
 
@@ -42,7 +47,8 @@ export function MatchCelebrationOverlay({ payload, onDone }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -73,4 +79,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-});
+  });
+}

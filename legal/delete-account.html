@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trivia Dash — Delete Account</title>
+  <meta name="description" content="How to delete your Trivia Dash account and associated data." />
+  <style>
+    :root { --bg:#fff; --fg:#1a1a1a; --muted:#5a5a5a; --accent:#1d4ed8; --rule:#e6e6e6; --card:#f6f7f9; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0f1115; --fg:#ececec; --muted:#a8adb8; --accent:#6ea8ff; --rule:#2a2d33; --card:#161a20; }
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+    main{max-width:760px;margin:0 auto;padding:48px 24px 80px}
+    h1{font-size:1.9rem;margin:0 0 8px;letter-spacing:-0.01em}
+    h2{font-size:1.2rem;margin:32px 0 8px;letter-spacing:-0.005em}
+    p,ul,ol{margin:8px 0}
+    ul,ol{padding-left:22px}
+    li{margin:4px 0}
+    a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+    a:hover{text-decoration:none}
+    .meta{color:var(--muted);font-size:0.92rem}
+    hr{border:0;border-top:1px solid var(--rule);margin:28px 0}
+    code{background:rgba(127,127,127,0.12);padding:1px 6px;border-radius:4px;font-size:0.92em}
+    .callout{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:16px 18px;margin:16px 0}
+    footer{color:var(--muted);font-size:0.9rem;margin-top:40px}
+    .nav a + a::before{content:" · ";color:var(--muted)}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Delete your Trivia Dash account</h1>
+    <p class="meta"><strong>Last updated:</strong> January 2026</p>
+
+    <p>
+      This page explains how to delete your <strong>Trivia Dash</strong> account
+      (package <code>com.lizzi.triviadash</code>), what data is removed, and what is kept.
+    </p>
+
+    <h2>What gets deleted</h2>
+    <ul>
+      <li>Your Supabase profile (display name, avatar, account identifier, email link)</li>
+      <li>Your cloud-synced gameplay data (scores, Elo, match history, leaderboard entries)</li>
+      <li>Any party-lobby records linked to your account</li>
+    </ul>
+
+    <h2>What we keep</h2>
+    <ul>
+      <li>Anonymised aggregate statistics (these cannot be linked back to you)</li>
+      <li>Billing records held by <strong>Google Play</strong> — these are managed by Google and retained for tax and legal reasons</li>
+      <li>Limited records we are legally required to keep (for example, fraud-prevention logs), kept only as long as the law requires</li>
+    </ul>
+
+    <h2>Option 1 — In the app</h2>
+    <ol>
+      <li>Open <strong>Trivia Dash</strong>.</li>
+      <li>Go to <strong>Settings → Account</strong> and tap <strong>Delete account</strong> (if available in your app version).</li>
+      <li>If you only want to remove local data: Android <strong>Settings → Apps → Trivia Dash → Storage → Clear data</strong>, then uninstall.</li>
+    </ol>
+
+    <h2>Option 2 — Request cloud deletion by email</h2>
+    <p>
+      Email <a href="mailto:support@triviadash.app?subject=Delete%20my%20Trivia%20Dash%20account">support@triviadash.app</a>
+      from the address linked to your Google account, with the subject
+      <strong>Delete my Trivia Dash account</strong>. Please include the display name you used
+      in the app so we can identify your record.
+    </p>
+    <div class="callout">
+      We will confirm receipt within 72 hours and complete deletion of your Supabase profile
+      and online stats within <strong>30 days</strong>. You will receive an email confirmation
+      once it is done.
+    </div>
+
+    <h2>Subscriptions</h2>
+    <p>
+      <strong>Deleting your account does not cancel a Trivia Dash Pro subscription.</strong>
+      Cancel it separately in
+      <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Google Play → Subscriptions</a>.
+      Cancellation stops future renewals; access to Pro continues until the end of the period
+      already paid for.
+    </p>
+
+    <h2>Need help?</h2>
+    <p>
+      If you can’t access the email linked to your account, or you have any other questions,
+      contact <a href="mailto:support@triviadash.app">support@triviadash.app</a> and we’ll help
+      verify your identity another way.
+    </p>
+
+    <hr />
+    <footer class="nav">
+      <a href="https://triviadashlegal.netlify.app/privacy-policy">Privacy policy</a>
+      <a href="https://triviadashlegal.netlify.app/terms">Terms of use</a>
+    </footer>
+  </main>
+</body>
+</html>

@@ -5,7 +5,18 @@ export type Category =
   | 'Geography'
   | 'Sports'
   | 'Entertainment'
-  | 'Pop Culture';
+  | 'Pop Culture'
+  | 'Art'
+  | 'Literature'
+  | 'Technology'
+  | 'Nature'
+  | 'Music'
+  | 'Movies'
+  | 'Food'
+  | 'Animals'
+  | 'Politics'
+  | 'Space'
+  | 'Mythology';
 
 export type QuestionTier = 'free' | 'pro';
 
@@ -17,6 +28,10 @@ export interface Question {
   answer: number;
   year?: number;
   tier: QuestionTier;
+  /** Pro picture round — remote image URL. */
+  imageUrl?: string;
+  /** User-created pack id when applicable. */
+  packId?: string;
 }
 
 export interface AvatarConfig {
@@ -29,14 +44,29 @@ export interface AvatarConfig {
 export type AvatarFrame = 'none' | 'classic' | 'gold' | 'silver' | 'neon' | 'star';
 export type AvatarBadge = 'none' | 'crown' | 'star' | 'fire' | 'bolt' | 'gem' | 'trophy' | 'party';
 
-export type VoicePreset = 'host' | 'announcer' | 'scholar' | 'coach' | 'robot';
+/** Voice pack id — see voiceCatalog.ts (3 free + 250 premium). */
+export type VoicePreset = string;
+
+export interface CategoryPlayStats {
+  plays: number;
+  bestStreak: number;
+}
 
 export interface ProfileStats {
   matchesPlayed: number;
   totalCorrect: number;
   categoryCorrect: Partial<Record<Category, number>>;
+  categoryPlays: Partial<Record<Category, CategoryPlayStats>>;
   partyWins: number;
   passPlayWins: number;
+  quadWins?: number;
+  seasonXp: number;
+  /** dateKey → best daily score */
+  dailyBests: Record<string, number>;
+  /** ISO date of last practice day + count */
+  practiceDay?: string;
+  practiceCountToday?: number;
+  dailyReminderEnabled?: boolean;
 }
 
 export interface AchievementState {
@@ -48,9 +78,13 @@ export interface AchievementState {
   };
 }
 
+export type AuthProvider = 'google' | 'email' | 'apple' | 'facebook';
+
 export interface Profile {
   id: string;
   username: string;
+  email?: string;
+  authProvider?: AuthProvider;
   avatar: AvatarConfig;
   voicePreset: VoicePreset;
   voiceEnabled: boolean;
@@ -69,6 +103,51 @@ export interface Profile {
   streakShield: boolean;
   achievementState: AchievementState;
   stats: ProfileStats;
+  seasonPass?: SeasonPassProgress;
+  /** Local file:// or remote https URL for profile picture. */
+  profilePhotoUri?: string;
+  /** Local file:// or remote https URL for cover / banner image. */
+  coverPhotoUri?: string;
+}
+
+export interface SeasonPassProgress {
+  seasonId: string;
+  xp: number;
+  /** Wins counting toward the next +XP (need 10). */
+  winsTowardXp?: number;
+  claimedFree: number[];
+  claimedPro: number[];
+}
+
+export interface DailyLeaderboardEntry {
+  id: string;
+  username: string;
+  score: number;
+  rank?: number;
+  avatar?: AvatarConfig;
+  isYou?: boolean;
+}
+
+export interface UgcPack {
+  id: string;
+  title: string;
+  author: string;
+  category: Category;
+  questionIds: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  tier?: 'free' | 'pro';
+  createdAt: number;
+}
+
+export interface FriendPartyRoom {
+  code: string;
+  hostName: string;
+  hostId: string;
+  mode: 'party' | 'livehost';
+  questionSeed: number;
+  maxPlayers: number;
+  players: { id: string; name: string }[];
+  createdAt: number;
 }
 
 export interface LeaderboardEntry {
@@ -109,7 +188,17 @@ export interface PlayerLiveStats {
   rank: number;
 }
 
-export type MatchMode = 'solo' | 'quick' | 'party' | 'daily' | 'quad' | 'passplay';
+export type MatchMode =
+  | 'solo'
+  | 'quick'
+  | 'ranked'
+  | 'practice'
+  | 'party'
+  | 'daily'
+  | 'quad'
+  | 'passplay'
+  | 'livehost'
+  | 'friendparty';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'unbeatable';
 
@@ -157,6 +246,18 @@ export interface MilestoneHit {
   emoji: string;
 }
 
+export interface SeasonXpSnapshot {
+  level: number;
+  xp: number;
+  xpInLevel: number;
+  xpToNextLevel: number;
+  xpDelta: number;
+  wins: number;
+  losses: number;
+  winsTowardXp: number;
+  leveledUp: boolean;
+}
+
 export interface MatchSummary {
   you: number;
   opponent: number;
@@ -176,6 +277,7 @@ export interface MatchSummary {
   collectedWedges?: Category[];
   milestones?: MilestoneHit[];
   achievementUnlocks?: MilestoneHit[];
+  seasonXp?: SeasonXpSnapshot;
 }
 
 export interface PartyReaction {

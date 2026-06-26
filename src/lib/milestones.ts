@@ -1,5 +1,5 @@
 import { rankTitle } from './elo';
-import type { Category, MatchSummary, MilestoneHit, Profile } from '../types';
+import type { MatchSummary, MilestoneHit, Profile } from '../types';
 
 export type MilestoneKind =
   | 'first_win'
@@ -21,16 +21,6 @@ export type MilestoneKind =
 const WIN_THRESHOLDS = [5, 10, 25, 50] as const;
 const STREAK_THRESHOLDS = [3, 5, 10] as const;
 const DAILY_THRESHOLDS = [7, 30] as const;
-const ALL_CATEGORIES: Category[] = [
-  'General',
-  'Science',
-  'History',
-  'Geography',
-  'Sports',
-  'Entertainment',
-  'Pop Culture',
-];
-
 function crossedThreshold(before: number, after: number, threshold: number): boolean {
   return before < threshold && after >= threshold;
 }
@@ -102,9 +92,13 @@ export function detectMilestones(
     hits.push({ kind: 'perfect_game', label: 'Perfect game!', emoji: '💯' });
   }
 
-  const wedges = summary.collectedWedges ?? [];
-  if (wedges.length >= ALL_CATEGORIES.length) {
-    hits.push({ kind: 'all_wedges', label: 'All 7 categories collected!', emoji: '🌈' });
+  const newWedges = summary.collectedWedges ?? [];
+  for (const cat of newWedges) {
+    hits.push({
+      kind: 'all_wedges',
+      label: `${cat} wedge earned!`,
+      emoji: '🥧',
+    });
   }
 
   if (summary.mode === 'party' && summary.partyRank === 1) {

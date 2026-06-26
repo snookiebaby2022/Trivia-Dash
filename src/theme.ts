@@ -1,4 +1,4 @@
-export const colors = {
+export const darkColors = {
   bg: '#0B0B16',
   bgElevated: '#16162A',
   card: '#1E1E38',
@@ -16,6 +16,31 @@ export const colors = {
   silver: '#CBD3DE',
   bronze: '#E0925C',
 };
+
+export const lightColors = {
+  bg: '#F4F4FA',
+  bgElevated: '#FFFFFF',
+  card: '#FFFFFF',
+  cardBorder: '#D8D8EC',
+  primary: '#6B4FE0',
+  primaryDark: '#5B3FE0',
+  accent: '#E84A7A',
+  success: '#1FA86A',
+  danger: '#E03E58',
+  warning: '#D9A020',
+  text: '#12121F',
+  textMuted: '#5A5A78',
+  textFaint: '#8A8AA8',
+  gold: '#C99A00',
+  silver: '#7A8494',
+  bronze: '#B86E3A',
+};
+
+export type ThemeColors = typeof darkColors;
+export type ColorScheme = 'dark' | 'light';
+
+/** Default palette for legacy static imports (dark). Prefer useTheme() in new code. */
+export const colors: ThemeColors = darkColors;
 
 export const spacing = {
   xs: 4,
@@ -40,3 +65,7 @@ export const font = {
   body: 16,
   small: 13,
 };
+
+export function paletteForScheme(scheme: ColorScheme): ThemeColors {
+  return scheme === 'light' ? lightColors : darkColors;
+}

@@ -30,7 +30,7 @@ export function newProfile(): Profile {
     username: randomGuestName(),
     avatar: randomAvatar(),
     voicePreset: 'host',
-    voiceEnabled: true,
+    voiceEnabled: false,
     elo: 1000,
     wins: 0,
     losses: 0,
@@ -67,14 +67,25 @@ function migrateProfile(raw: Partial<Profile>): Profile {
       isPro,
       achievementState: raw.achievementState ?? defaultAchievementState(),
     } as Profile),
-    voicePreset: clampVoicePreset(raw.voicePreset ?? 'host', isPro),
-    voiceEnabled: raw.voiceEnabled ?? true,
+    voicePreset: clampVoicePreset(
+      raw.voicePreset === 'announcer' || raw.voicePreset === 'coach' || raw.voicePreset === 'robot'
+        ? 'host'
+        : (raw.voicePreset ?? 'host'),
+      isPro
+    ),
+    voiceEnabled: false,
     isPro,
     dailyStreak: raw.dailyStreak ?? 0,
     streakShield: raw.streakShield ?? false,
     dailyExtraPlayDate: raw.dailyExtraPlayDate,
     achievementState: raw.achievementState ?? defaultAchievementState(),
-    stats: { ...defaultProfileStats(), ...raw.stats },
+    stats: {
+      ...defaultProfileStats(),
+      ...raw.stats,
+      categoryPlays: raw.stats?.categoryPlays ?? {},
+      dailyBests: raw.stats?.dailyBests ?? {},
+      seasonXp: raw.stats?.seasonXp ?? 0,
+    },
   };
 }
 

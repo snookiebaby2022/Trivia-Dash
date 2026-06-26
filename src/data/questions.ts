@@ -1,4 +1,6 @@
-import type { Question } from '../types';
+import type { Category, Question } from '../types';
+import { EXTRA_FREE_QUESTIONS } from './extraQuestions';
+import { PICTURE_QUESTIONS } from './pictureQuestions';
 import { PRO_HISTORICAL_QUESTIONS, PRO_YEAR_MAX, PRO_YEAR_MIN } from './proQuestions';
 
 const FREE_RAW: Omit<Question, 'tier'>[] = [
@@ -32,6 +34,18 @@ const FREE_RAW: Omit<Question, 'tier'>[] = [
   { id: 'q28', category: 'General', prompt: 'How many sides does a hexagon have?', options: ['5', '6', '7', '8'], answer: 1 },
   { id: 'q29', category: 'History', year: 1912, prompt: 'The Titanic sank in which year?', options: ['1905', '1912', '1918', '1923'], answer: 1 },
   { id: 'q30', category: 'Entertainment', prompt: 'Who is the author of "A Song of Ice and Fire"?', options: ['J.R.R. Tolkien', 'George R.R. Martin', 'Brandon Sanderson', 'Robert Jordan'], answer: 1 },
+  { id: 'q31', category: 'Pop Culture', prompt: 'Which app popularized short vertical videos with dances?', options: ['Snapchat', 'TikTok', 'Vine', 'Instagram'], answer: 1 },
+  { id: 'q32', category: 'Pop Culture', prompt: 'What streaming series features the Upside Down?', options: ['Dark', 'Stranger Things', 'The OA', 'Wednesday'], answer: 1 },
+  { id: 'q33', category: 'Art', prompt: 'Who painted "The Starry Night"?', options: ['Monet', 'Van Gogh', 'Picasso', 'Dalí'], answer: 1 },
+  { id: 'q34', category: 'Art', prompt: 'The ceiling of the Sistine Chapel was painted by whom?', options: ['Raphael', 'Michelangelo', 'Botticelli', 'Caravaggio'], answer: 1 },
+  { id: 'q35', category: 'Literature', prompt: 'Who wrote "Pride and Prejudice"?', options: ['Charlotte Brontë', 'Jane Austen', 'Mary Shelley', 'Emily Dickinson'], answer: 1 },
+  { id: 'q36', category: 'Literature', prompt: 'In which novel does Atticus Finch appear?', options: ['1984', 'To Kill a Mockingbird', 'The Great Gatsby', 'Beloved'], answer: 1 },
+  { id: 'q37', category: 'Technology', prompt: 'What does "CPU" stand for?', options: ['Central Processing Unit', 'Computer Personal Utility', 'Core Program Uplink', 'Cached Processing Unit'], answer: 0 },
+  { id: 'q38', category: 'Technology', prompt: 'Which company created the iPhone?', options: ['Microsoft', 'Google', 'Apple', 'Samsung'], answer: 2 },
+  { id: 'q39', category: 'Nature', prompt: 'What is the largest land animal?', options: ['Giraffe', 'African elephant', 'Polar bear', 'Hippo'], answer: 1 },
+  { id: 'q40', category: 'Nature', prompt: 'Photosynthesis mainly occurs in which part of a plant?', options: ['Roots', 'Stem', 'Leaves', 'Flowers'], answer: 2 },
+  { id: 'q41', category: 'Music', prompt: 'How many strings does a standard guitar have?', options: ['4', '5', '6', '7'], answer: 2 },
+  { id: 'q42', category: 'Music', prompt: 'Which instrument has 88 keys?', options: ['Organ', 'Piano', 'Harpsichord', 'Accordion'], answer: 1 },
 ];
 
 export const FREE_QUESTIONS: Question[] = FREE_RAW.map((q) => ({ ...q, tier: 'free' as const }));
@@ -44,11 +58,17 @@ export interface PickQuestionsOptions {
   yearMin?: number;
   yearMax?: number;
   questionIds?: string[];
+  category?: Category;
+  includePictures?: boolean;
 }
 
-export function getQuestionPool(isPro: boolean): Question[] {
-  if (isPro) return [...FREE_QUESTIONS, ...PRO_HISTORICAL_QUESTIONS];
-  return FREE_QUESTIONS;
+export function getQuestionPool(isPro: boolean, includePictures = false): Question[] {
+  const base = [...FREE_QUESTIONS, ...EXTRA_FREE_QUESTIONS];
+  if (isPro) {
+    const pool = [...base, ...PRO_HISTORICAL_QUESTIONS];
+    return includePictures ? [...pool, ...PICTURE_QUESTIONS] : pool;
+  }
+  return base;
 }
 
 export function getQuestionById(id: string, isPro: boolean): Question | undefined {
@@ -60,9 +80,17 @@ export function pickMatchQuestions(
   seed?: number,
   options: PickQuestionsOptions = {}
 ): Question[] {
-  const { isPro = false, yearMin = PRO_YEAR_MIN, yearMax = PRO_YEAR_MAX, questionIds } = options;
+  const {
+    isPro = false,
+    yearMin = PRO_YEAR_MIN,
+    yearMax = PRO_YEAR_MAX,
+    questionIds,
+    category,
+    includePictures = false,
+  } = options;
 
-  let pool = getQuestionPool(isPro);
+  let pool = getQuestionPool(isPro, includePictures);
+  if (category) pool = pool.filter((q) => q.category === category);
 
   if (questionIds?.length) {
     pool = questionIds

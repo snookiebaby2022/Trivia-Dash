@@ -1,0 +1,37 @@
+name: Deploy Android
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: android-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build production AAB
+        run: eas build --profile production --platform android --non-interactive
+
+      - name: Submit to Google Play
+        if: ${{ vars.AUTO_SUBMIT_PLAY == 'true' }}
+        run: eas submit --profile production --platform android --latest --non-interactive

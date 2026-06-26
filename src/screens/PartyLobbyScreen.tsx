@@ -1,5 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   ActivityIndicator,
   Pressable,
@@ -25,12 +26,16 @@ import {
 } from '../lib/matchmaking';
 import { buildQuadFromLobby } from '../lib/quad';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import type { BotDifficulty, PartyLobby, PartyPlayer } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PartyLobby'>;
 
-export function PartyLobbyScreen({ navigation, route }: Props) {
+export function PartyLobbyScreen({navigation, route }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { profile } = useProfile();
   const [lobby, setLobby] = useState<PartyLobby | null>(null);
   const [joinCode, setJoinCode] = useState(route.params?.joinCode ?? '');
@@ -219,7 +224,12 @@ export function PartyLobbyScreen({ navigation, route }: Props) {
       <Text style={styles.section}>Players ({lobby.players.length}/{lobby.maxPlayers})</Text>
       <View style={styles.playerList}>
         {lobby.players.map((p) => (
-          <PlayerRow key={p.playerId} player={p} isYou={p.playerId === profile.id} />
+          <PlayerRow
+            key={p.playerId}
+            player={p}
+            isYou={p.playerId === profile.id}
+            styles={styles}
+          />
         ))}
       </View>
 
@@ -248,7 +258,15 @@ export function PartyLobbyScreen({ navigation, route }: Props) {
   );
 }
 
-function PlayerRow({ player, isYou }: { player: PartyPlayer; isYou: boolean }) {
+function PlayerRow({
+  player,
+  isYou,
+  styles,
+}: {
+  player: PartyPlayer;
+  isYou: boolean;
+  styles: ReturnType<typeof makeStyles>;
+}) {
   return (
     <View style={[styles.playerRow, isYou && styles.playerYou]}>
       <AvatarView avatar={player.avatar} size={44} showRing={player.ready} />
@@ -265,7 +283,8 @@ function PlayerRow({ player, isYou }: { player: PartyPlayer; isYou: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -368,4 +387,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actions: { gap: spacing.sm, paddingVertical: spacing.md },
-});
+  });
+}

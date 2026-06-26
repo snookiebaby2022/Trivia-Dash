@@ -6,6 +6,10 @@ web-build/
 .env
 .env.local
 
+# Google Cloud service account keys — never commit
+trivia-dash-*.json
+*service*account*.json
+
 # Leftover nested repo from old project name — must not be committed
 brain-brawl/
 
@@ -15,4 +19,19 @@ brain-brawl/
 # native
 ios/
 android/
+*.apk
+*.aab
+
+# IDE
+.idea/
+
+# local smoke export
+dist-smoke-test/
+
+# local EAS export scratch dirs
+.expo-tmp-export/
+.expo-tmp-export2/
 *.orig.*
+
+# Local Netlify folder
+.netlify

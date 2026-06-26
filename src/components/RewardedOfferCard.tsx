@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   title: string;
@@ -11,7 +13,10 @@ interface Props {
 }
 
 /** Rewarded-ad offer row — watch ad to earn bonus. */
-export function RewardedOfferCard({ title, subtitle, loading, onWatch }: Props) {
+export function RewardedOfferCard({title, subtitle, loading, onWatch }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.card}>
       <View style={styles.textWrap}>
@@ -33,7 +38,8 @@ export function RewardedOfferCard({ title, subtitle, loading, onWatch }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -70,4 +76,5 @@ const styles = StyleSheet.create({
     fontSize: font.small,
     fontWeight: '900',
   },
-});
+  });
+}

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { colors, font, radius, spacing } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   label: string;
@@ -20,6 +22,8 @@ export function PrimaryButton({
   loading,
   style,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const bg =
     variant === 'primary' ? colors.primary : variant === 'accent' ? colors.accent : 'transparent';
   const border = variant === 'ghost' ? colors.cardBorder : 'transparent';
@@ -50,34 +54,36 @@ export function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    height: 56,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    borderWidth: 1,
-  },
-  ghost: {
-    borderWidth: 1,
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  label: {
-    color: colors.text,
-    fontSize: font.h3,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    base: {
+      height: 56,
+      borderRadius: radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      borderWidth: 1,
+    },
+    ghost: {
+      borderWidth: 1,
+    },
+    content: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    label: {
+      color: colors.text,
+      fontSize: font.h3,
+      fontWeight: '800',
+      letterSpacing: 0.3,
+    },
+    pressed: {
+      opacity: 0.85,
+      transform: [{ scale: 0.98 }],
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+  });
+}

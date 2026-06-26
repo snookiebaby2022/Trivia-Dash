@@ -1,9 +1,11 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getCategoryTheme } from '../lib/categoryTheme';
 import type { Category } from '../types';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   category: Category;
@@ -12,6 +14,8 @@ interface Props {
   total: number;
   year?: number;
   tier?: string;
+  imageUrl?: string;
+  compact?: boolean;
   onSpeak?: () => void;
 }
 
@@ -23,8 +27,13 @@ export function TriviaCard({
   total,
   year,
   tier,
+  imageUrl,
+  compact,
   onSpeak,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const theme = getCategoryTheme(category);
 
   return (
@@ -72,13 +81,22 @@ export function TriviaCard({
 
         <View style={[styles.divider, { backgroundColor: theme.fill }]} />
 
-        <Text style={styles.prompt}>{prompt}</Text>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={[styles.picture, compact && styles.pictureCompact]}
+            resizeMode="cover"
+          />
+        ) : null}
+
+        <Text style={[styles.prompt, compact && styles.promptCompact]}>{prompt}</Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     flexDirection: 'row',
     borderRadius: radius.lg,
@@ -178,6 +196,16 @@ const styles = StyleSheet.create({
     marginVertical: spacing.md,
     opacity: 0.85,
   },
+  picture: {
+    width: '100%',
+    height: 140,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.bgElevated,
+  },
+  pictureCompact: {
+    height: 100,
+  },
   prompt: {
     color: colors.text,
     fontSize: font.h3,
@@ -185,4 +213,9 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     letterSpacing: -0.2,
   },
-});
+  promptCompact: {
+    fontSize: font.body,
+    lineHeight: 24,
+  },
+  });
+}

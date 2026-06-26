@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { MilestoneHit } from '../types';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 interface Props {
   milestones: MilestoneHit[];
   title?: string;
 }
 
-export function MilestoneBanner({ milestones, title = 'Milestone unlocked!' }: Props) {
+export function MilestoneBanner({milestones, title = 'Milestone unlocked!' }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   if (!milestones.length) return null;
 
   return (
@@ -25,7 +30,8 @@ export function MilestoneBanner({ milestones, title = 'Milestone unlocked!' }: P
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     backgroundColor: 'rgba(255, 210, 77, 0.12)',
     borderRadius: radius.lg,
@@ -58,4 +64,5 @@ const styles = StyleSheet.create({
     fontSize: font.body,
     fontWeight: '800',
   },
-});
+  });
+}

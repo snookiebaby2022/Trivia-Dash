@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import type { PartyReaction } from '../types';
+import { spacing } from '../theme';
 
 interface Props {
   reactions: PartyReaction[];

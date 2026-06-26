@@ -1,17 +1,22 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useProfile } from '../context/ProfileContext';
-import { APP_NAME_PRO } from '../lib/brand';
 import { PRO_ANNUAL_LABEL, PRO_PRICE_LABEL, proFeaturesLabel } from '../lib/monetization';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
+import { LegalLinks } from './LegalLinks';
 import { PrimaryButton } from './PrimaryButton';
 
 interface Props {
   onClose?: () => void;
 }
 
-export function ProUpgradeCard({ onClose }: Props) {
+export function ProUpgradeCard({onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const { profile, showProPaywall, restorePurchases } = useProfile();
   const [loading, setLoading] = React.useState(false);
   const [restoring, setRestoring] = React.useState(false);
@@ -20,16 +25,16 @@ export function ProUpgradeCard({ onClose }: Props) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>🎉 {APP_NAME_PRO}</Text>
+      <Text style={styles.title}>✨ Unlock everything</Text>
       <Text style={styles.price}>
         {PRO_PRICE_LABEL} · {PRO_ANNUAL_LABEL}
       </Text>
       <Text style={styles.features}>{proFeaturesLabel()}</Text>
       <View style={styles.perks}>
+        <Text style={styles.perk}>✓ Full 1930–2026 question archive</Text>
         <Text style={styles.perk}>✓ No interstitial ads</Text>
-        <Text style={styles.perk}>✓ 1930–2026 question archive</Text>
-        <Text style={styles.perk}>✓ Announcer, Coach & Robot voices</Text>
-        <Text style={styles.perk}>✓ Gold, Neon & Star frames</Text>
+        <Text style={styles.perk}>✓ All premium voices & cosmetics</Text>
+        <Text style={styles.perk}>✓ Every Pro frame, badge & party perk</Text>
       </View>
       <PrimaryButton
         label={loading ? 'Opening…' : 'View plans'}
@@ -52,6 +57,7 @@ export function ProUpgradeCard({ onClose }: Props) {
       >
         <Text style={styles.restoreText}>{restoring ? 'Restoring…' : 'Restore purchases'}</Text>
       </Pressable>
+      <LegalLinks compact />
       <Pressable onPress={onClose} style={styles.dismiss}>
         <Text style={styles.dismissText}>Maybe later</Text>
       </Pressable>
@@ -59,7 +65,8 @@ export function ProUpgradeCard({ onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
@@ -108,4 +115,5 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     fontSize: font.small,
   },
-});
+  });
+}

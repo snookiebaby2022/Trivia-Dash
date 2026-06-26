@@ -65,12 +65,20 @@ function getApiKey(): string {
   return Platform.OS === 'ios' ? REVENUECAT_API_KEY_IOS : REVENUECAT_API_KEY_ANDROID;
 }
 
+/** RevenueCat shows a blocking alert if a release build calls configure() with a test_ key. */
+function canUseRevenueCat(): boolean {
+  const apiKey = getApiKey();
+  if (!apiKey || !getPurchasesModule()) return false;
+  if (apiKey.startsWith('test_') && !__DEV__) return false;
+  return true;
+}
+
 export function isProEntitled(info: CustomerInfo): boolean {
   return info.entitlements.active[PRO_ENTITLEMENT_ID] !== undefined;
 }
 
 export function purchasesConfigured(): boolean {
-  return Boolean(getApiKey() && getPurchasesModule());
+  return canUseRevenueCat();
 }
 
 export async function initPurchases(
@@ -80,12 +88,19 @@ export async function initPurchases(
   if (configured) return;
   const mod = getPurchasesModule();
   const apiKey = getApiKey();
-  if (!mod || !apiKey) {
+  if (!canUseRevenueCat()) {
+    if (apiKey?.startsWith('test_') && !__DEV__) {
+      console.warn(
+        '[RevenueCat] Skipping configure: test API keys cannot be used in release APKs. ' +
+          'Set EXPO_PUBLIC_REVENUECAT_ANDROID_KEY to your production goog_ key before shipping.'
+      );
+    }
     configured = true;
     return;
   }
 
   try {
+    if (!mod) return;
     if (__DEV__) {
       mod.default.setLogLevel(mod.LOG_LEVEL.DEBUG);
     }

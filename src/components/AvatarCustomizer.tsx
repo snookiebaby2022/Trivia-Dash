@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -10,26 +11,31 @@ import {
 } from '../lib/avatars';
 import { isBadgeLocked, isFrameLocked } from '../lib/monetization';
 import type { AchievementState, AvatarConfig } from '../types';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import { AvatarView } from './AvatarView';
 
 type Tab = 'face' | 'color' | 'frame' | 'badge';
 
 interface Props {
   avatar: AvatarConfig;
+  photoUri?: string;
   isPro: boolean;
   cosmeticUnlocks?: AchievementState['cosmeticUnlocks'];
   onChange: (avatar: AvatarConfig) => void;
   onRequestPro?: () => void;
 }
 
-export function AvatarCustomizer({
-  avatar,
+export function AvatarCustomizer({avatar,
+  photoUri,
   isPro,
   cosmeticUnlocks,
   onChange,
   onRequestPro,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const [tab, setTab] = useState<Tab>('face');
   const current = normalizeAvatar(avatar);
 
@@ -38,7 +44,7 @@ export function AvatarCustomizer({
   return (
     <View style={styles.wrap}>
       <View style={styles.previewRow}>
-        <AvatarView avatar={current} size={72} showRing />
+        <AvatarView avatar={current} photoUri={photoUri} size={72} showRing />
         <Text style={styles.previewHint}>Build your game-show contestant</Text>
       </View>
 
@@ -138,7 +144,8 @@ export function AvatarCustomizer({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,
@@ -214,4 +221,5 @@ const styles = StyleSheet.create({
   frameRowActive: { backgroundColor: colors.bgElevated },
   frameLabel: { color: colors.text, fontSize: font.body, fontWeight: '600' },
   badgeOption: { color: colors.text, fontSize: font.h3 },
-});
+  });
+}

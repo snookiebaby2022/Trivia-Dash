@@ -1,5 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,14 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdBanner } from '../components/AdBanner';
+import { AuthPanel } from '../components/AuthPanel';
+import { OnboardingWalkthrough } from '../components/OnboardingWalkthrough';
+import { LegalLinks } from '../components/LegalLinks';
 import { AvatarCustomizer } from '../components/AvatarCustomizer';
-import { AvatarView } from '../components/AvatarView';
+import { ProfileBanner } from '../components/ProfileBanner';
 import { CategoryWheel } from '../components/CategoryWheel';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ProUpgradeCard } from '../components/ProUpgradeCard';
 import { RewardedOfferCard } from '../components/RewardedOfferCard';
 import { VoicePicker } from '../components/VoicePicker';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 import { APP_NAME_UPPER, APP_TAGLINE, APP_WELCOME_LINE } from '../lib/brand';
 import { getDailyChallenge, todayKey } from '../lib/daily';
 import { rankTitle } from '../lib/elo';
@@ -30,41 +35,65 @@ import {
   consumeDailyExtraPlay,
   dailyStatusLabel,
 } from '../lib/monetization';
+import { canUseRankedMatch } from '../lib/entitlements';
 import { isMatchmakingAvailable } from '../lib/matchmaking';
-import { isMusicEnabled, setMusicEnabled, startMenuMusic } from '../lib/audio';
+import { dismissDailyReminder, shouldShowDailyReminder } from '../lib/reminders';
+import { hasCompletedWalkthrough } from '../lib/onboarding';
+import { getWeeklyEvent } from '../lib/weeklyEvent';
 import { speakQuestion } from '../lib/speech';
+import { countEarnedWedges, WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
 import { FREE_QUESTIONS, PRO_HISTORICAL_QUESTIONS } from '../data/questions';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export function HomeScreen({ navigation }: Props) {
+  const { colors } = useTheme();
   const {
     profile,
     loading,
+    isSignedIn,
     setUsername,
     setAvatar,
+    setProfilePhoto,
+    setCoverPhoto,
     setVoicePreset,
-    setVoiceEnabled,
     watchRewardedAd,
     manageSubscription,
     update,
+    showProPaywall,
   } = useProfile();
   const [editing, setEditing] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
   const [draft, setDraft] = useState('');
   const [showCustomize, setShowCustomize] = useState(false);
   const [showPro, setShowPro] = useState(false);
   const [rewardLoading, setRewardLoading] = useState<'daily' | 'shield' | null>(null);
-  const [musicOn, setMusicOn] = useState(true);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const styles = useMemo(() => makeHomeStyles(colors), [colors]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile || loading) return;
+      void hasCompletedWalkthrough().then((done) => {
+        if (!done) setShowWalkthrough(true);
+      });
+    }, [profile, loading])
+  );
 
   useEffect(() => {
-    void isMusicEnabled().then(setMusicOn);
-  }, []);
+    if (!profile) {
+      setShowReminder(false);
+      return;
+    }
+    void shouldShowDailyReminder(profile).then(setShowReminder);
+  }, [profile]);
 
   if (loading || !profile) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.bg }]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </SafeAreaView>
     );
@@ -79,6 +108,8 @@ export function HomeScreen({ navigation }: Props) {
     : FREE_QUESTIONS.length;
   const dailyReady = canPlayDailyToday(profile);
   const dailyLabel = dailyStatusLabel(profile);
+  const wedgesEarned = countEarnedWedges(profile);
+  const weekly = getWeeklyEvent();
 
   const startDaily = async () => {
     if (!dailyReady) return;
@@ -93,19 +124,43 @@ export function HomeScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
+      <OnboardingWalkthrough
+        visible={showWalkthrough}
+        isSignedIn={isSignedIn}
+        onDone={() => setShowWalkthrough(false)}
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Text style={styles.brand}>{APP_NAME_UPPER}</Text>
-          <Text style={styles.tagline}>{APP_TAGLINE}</Text>
+          <Pressable
+            style={[styles.settingsBtn, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}
+            onPress={() => navigation.navigate('Settings')}
+            accessibilityLabel="Settings"
+          >
+            <Text style={styles.settingsIcon}>⚙</Text>
+          </Pressable>
+          <Text style={[styles.brand, { color: colors.gold, textShadowColor: colors.primary }]}>{APP_NAME_UPPER}</Text>
+          <View style={styles.settingsSpacer} />
         </View>
+        <Text style={styles.tagline}>{APP_TAGLINE}</Text>
 
-        <CategoryWheel />
-
-        <Pressable style={styles.profileCard} onPress={() => setShowCustomize((v) => !v)}>
-          <AvatarView avatar={profile.avatar} size={64} showRing />
-          <View style={{ flex: 1 }}>
-            {editing ? (
+        <ProfileBanner
+          profile={profile}
+          rankColor={rank.color}
+          rankTitle={rank.title}
+          trophyCount={profile.achievementState.unlocked.length}
+          username={profile.username}
+          editHint="tap name to rename · info to customize"
+          onPressCover={() => void setCoverPhoto()}
+          onPressPhoto={() => void setProfilePhoto()}
+          onPressTrophies={() => navigation.navigate('Achievements')}
+          onPressCard={() => setShowCustomize((v) => !v)}
+          onPressUsername={() => {
+            setDraft(profile.username);
+            setEditing(true);
+          }}
+          editingName={
+            editing ? (
               <TextInput
                 value={draft}
                 onChangeText={setDraft}
@@ -123,30 +178,51 @@ export function HomeScreen({ navigation }: Props) {
                   setEditing(false);
                 }}
               />
-            ) : (
-              <Pressable
-                onPress={() => {
-                  setDraft(profile.username);
-                  setEditing(true);
-                }}
-              >
-                <Text style={styles.username}>{profile.username}</Text>
-                <Text style={styles.editHint}>tap name to rename · tap card to customize</Text>
-              </Pressable>
-            )}
-            <View style={styles.rankRow}>
-              <View style={[styles.rankDot, { backgroundColor: rank.color }]} />
-              <Text style={[styles.rankText, { color: rank.color }]}>{rank.title}</Text>
-              {profile.isPro && <Text style={styles.proBadge}>PRO</Text>}
-              <Text style={styles.eloText}>{profile.elo} ELO</Text>
-            </View>
-          </View>
+            ) : undefined
+          }
+        />
+
+        {showReminder && (
+          <Pressable
+            style={styles.reminder}
+            onPress={() => {
+              void dismissDailyReminder();
+              setShowReminder(false);
+              void startDaily();
+            }}
+          >
+            <Text style={styles.reminderText}>📅 Daily challenge ready — tap to play</Text>
+          </Pressable>
+        )}
+
+        <Pressable
+          style={styles.weekly}
+          onPress={() => navigation.navigate('CategoryPractice', { category: weekly.category })}
+        >
+          <Text style={styles.weeklyTitle}>
+            {weekly.emoji} {weekly.label}
+          </Text>
+          <Text style={styles.weeklySub}>
+            Grind {weekly.category} · {profile.isPro ? '+25% season XP' : 'Unlock everything for bonus XP'}
+          </Text>
         </Pressable>
 
+        <CategoryWheel
+          profile={profile}
+          onPress={() => navigation.navigate('WedgeProfile')}
+        />
+
+        <View style={styles.wedgeHint}>
+          <Text style={styles.wedgeHintText}>
+            {wedgesEarned} wedges earned · {WEDGE_UNLOCK_CORRECT} correct per category
+          </Text>
+        </View>
+
         {showCustomize && (
-          <>
+          <View style={styles.customizeBlock}>
             <AvatarCustomizer
               avatar={profile.avatar}
+              photoUri={profile.profilePhotoUri}
               isPro={profile.isPro}
               cosmeticUnlocks={profile.achievementState.cosmeticUnlocks}
               onChange={(a) => void setAvatar(a)}
@@ -154,10 +230,8 @@ export function HomeScreen({ navigation }: Props) {
             />
             <VoicePicker
               preset={profile.voicePreset}
-              enabled={profile.voiceEnabled}
               isPro={profile.isPro}
               onPreset={(p) => void setVoicePreset(p)}
-              onToggle={(e) => void setVoiceEnabled(e)}
               onPreview={(p) =>
                 void speakQuestion(APP_WELCOME_LINE, {
                   preset: p,
@@ -166,47 +240,108 @@ export function HomeScreen({ navigation }: Props) {
               }
               onRequestPro={() => setShowPro(true)}
             />
-            <Pressable
-              style={styles.musicRow}
-              onPress={async () => {
-                const next = !musicOn;
-                setMusicOn(next);
-                await setMusicEnabled(next);
-                if (next) await startMenuMusic();
-              }}
-            >
-              <Text style={styles.musicLabel}>Party menu music</Text>
-              <Text style={[styles.musicToggle, musicOn && styles.musicOn]}>
-                {musicOn ? '🎵 On' : '🔇 Off'}
-              </Text>
-            </Pressable>
-          </>
+          </View>
         )}
 
-        <Pressable
-          style={styles.trophyCard}
-          onPress={() => navigation.navigate('Achievements')}
-        >
-          <Text style={styles.trophyEmoji}>🏆</Text>
-          <View style={styles.trophyBody}>
-            <Text style={styles.trophyTitle}>Trophy Case</Text>
-            <Text style={styles.trophySub}>
-              {profile.achievementState.unlocked.length} achievements unlocked
-            </Text>
-          </View>
-          <Text style={styles.trophyChevron}>›</Text>
-        </Pressable>
+        <AuthPanel />
+
+        <View style={styles.heroSection}>
+          <PrimaryButton
+            label={`⚡  QUICK MATCH · Solo`}
+            variant="primary"
+            onPress={() => navigation.navigate('Game', { mode: 'solo' })}
+          />
+          <Text style={styles.heroSub}>Single-player dash — no opponent wait</Text>
+
+          <PrimaryButton
+            label={`📅  DAILY CHALLENGE · ${dailyLabel}`}
+            variant={dailyReady ? 'accent' : 'ghost'}
+            onPress={() => void startDaily()}
+          />
+          <PrimaryButton
+            label={canUseRankedMatch(profile.isPro) ? '⚔  RANKED QUICK MATCH' : '⚔  Ranked match 🔒 Pro'}
+            variant="ghost"
+            onPress={() => {
+              if (!canUseRankedMatch(profile.isPro)) void showProPaywall();
+              else navigation.navigate('Game', { mode: 'ranked', botDifficulty: 'medium' });
+            }}
+          />
+          <PrimaryButton
+            label="🎯  Category practice"
+            variant="ghost"
+            onPress={() => navigation.navigate('CategoryPractice')}
+          />
+        </View>
 
         <View style={styles.statsRow}>
-          <Stat label="Wins" value={String(profile.wins)} color={colors.success} />
-          <Stat label="Win rate" value={`${winRate}%`} color={colors.primary} />
-          <Stat label="Streak" value={String(profile.streak)} color={colors.accent} />
-          <Stat label="Daily" value={String(profile.dailyStreak)} color={colors.gold} />
+          <Stat label="Wins" value={String(profile.wins)} color={colors.success} styles={styles} />
+          <Stat label="Win rate" value={`${winRate}%`} color={colors.primary} styles={styles} />
+          <Stat label="Streak" value={String(profile.streak)} color={colors.accent} styles={styles} />
+          <Stat label="Correct" value={String(profile.stats.totalCorrect)} color={colors.gold} styles={styles} />
         </View>
 
         {profile.streakShield && (
-          <Text style={styles.shieldHint}>🛡 Streak shield active — protects your next missed day</Text>
+          <Text style={styles.shieldHint}>🛡 Streak shield active</Text>
         )}
+
+        <View style={styles.modeGrid}>
+          <ModeTile
+            emoji="🎲"
+            title="4-Player"
+            sub="Bots or friends"
+            onPress={() => navigation.navigate('QuadSetup')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🎉"
+            title="Party"
+            sub="Host or join"
+            onPress={() => navigation.navigate('PartyLobby', { host: true })}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="📊"
+            title="Daily ranks"
+            sub="Same 10 Qs"
+            onPress={() => navigation.navigate('DailyLeaderboard')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🏅"
+            title="ELO board"
+            sub="Global ranks"
+            onPress={() => navigation.navigate('Leaderboard')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🎫"
+            title="Season pass"
+            sub="XP rewards"
+            onPress={() => navigation.navigate('SeasonPass')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🤝"
+            title="Friend party"
+            sub="Code join"
+            onPress={() => navigation.navigate('FriendParty')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="📦"
+            title="Community"
+            sub="UGC packs"
+            onPress={() => navigation.navigate('UgcPacks')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="✨"
+            title="What's Pro?"
+            sub="Free vs Pro"
+            onPress={() => navigation.navigate('UnlockFeatures')}
+            styles={styles}
+          />
+        </View>
 
         {!profile.isPro && canUseDailyRetryAd(profile) && (
           <RewardedOfferCard
@@ -234,79 +369,57 @@ export function HomeScreen({ navigation }: Props) {
           />
         )}
 
-        <View style={styles.archiveCard}>
-          <Text style={styles.archiveTitle}>Question archive</Text>
-          <Text style={styles.archiveCount}>{questionCount} questions unlocked</Text>
-          <Text style={styles.archiveSub}>
-            {profile.isPro
-              ? 'Full 1930–2026 historical party pack active'
-              : 'Pro unlocks 60+ decades trivia (1930–2026)'}
-          </Text>
-        </View>
-
         <AdBanner />
 
         {showPro && <ProUpgradeCard onClose={() => setShowPro(false)} />}
 
-        <View style={styles.actions}>
+        {!profile.isPro ? (
+          <PrimaryButton label="✨  Unlock everything" onPress={() => navigation.navigate('UnlockFeatures')} />
+        ) : (
+          <PrimaryButton
+            label="Manage subscription"
+            variant="ghost"
+            onPress={() => void manageSubscription()}
+          />
+        )}
+
+        <View style={styles.partySection}>
+          <Text style={styles.partyLabel}>Same room fun</Text>
           <PrimaryButton
             label="📱  PASS & PLAY"
             variant="accent"
             onPress={() => navigation.navigate('PassPlaySetup')}
           />
           <PrimaryButton
-            label="🎲  4-PLAYER"
-            onPress={() => navigation.navigate('QuadSetup')}
-          />
-          <PrimaryButton
-            label="🎉  HOST PARTY"
-            onPress={() => navigation.navigate('PartyLobby', { host: true })}
-          />
-          <PrimaryButton
             label="🚪  JOIN PARTY"
             variant="ghost"
             onPress={() => navigation.navigate('PartyLobby', undefined)}
           />
-          <PrimaryButton
-            label="⚔  QUICK MATCH"
-            onPress={() =>
-              navigation.navigate('Game', {
-                mode: 'quick',
-              })
-            }
-          />
-          <PrimaryButton
-            label={`📅  DAILY · ${dailyLabel}`}
-            variant={dailyReady ? 'primary' : 'ghost'}
-            onPress={() => void startDaily()}
-          />
-          <PrimaryButton
-            label="Leaderboard"
-            variant="ghost"
-            onPress={() => navigation.navigate('Leaderboard')}
-          />
-          {!profile.isPro ? (
-            <PrimaryButton label="Unlock Pro · 1930–2026" onPress={() => setShowPro(true)} />
-          ) : (
-            <PrimaryButton
-              label="Manage subscription"
-              variant="ghost"
-              onPress={() => void manageSubscription()}
-            />
-          )}
         </View>
 
         {!isMatchmakingAvailable() && (
           <Text style={styles.offlineNote}>
-            Online party + ranked need Supabase keys in .env — solo & daily still work offline.
+            Online party + ranked need Supabase keys — solo & daily work offline.
           </Text>
         )}
+
+        <LegalLinks />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({
+  label,
+  value,
+  color,
+  styles,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  styles: ReturnType<typeof makeHomeStyles>;
+}) {
   return (
     <View style={styles.stat}>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
@@ -315,33 +428,72 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+function ModeTile({
+  emoji,
+  title,
+  sub,
+  onPress,
+  styles,
+}: {
+  emoji: string;
+  title: string;
+  sub: string;
+  onPress: () => void;
+  styles: ReturnType<typeof makeHomeStyles>;
+}) {
+  return (
+    <Pressable style={styles.modeTile} onPress={onPress}>
+      <Text style={styles.modeEmoji}>{emoji}</Text>
+      <Text style={styles.modeTitle}>{title}</Text>
+      <Text style={styles.modeSub}>{sub}</Text>
+    </Pressable>
+  );
+}
+
+function makeHomeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+  container: { flex: 1 },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
   center: {
     flex: 1,
-    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsIcon: {
+    fontSize: 20,
+  },
+  settingsSpacer: {
+    width: 40,
   },
   brand: {
-    color: colors.gold,
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '900',
     letterSpacing: 3,
-    textShadowColor: colors.primary,
     textShadowRadius: 8,
+    flex: 1,
+    textAlign: 'center',
   },
   tagline: {
     color: colors.textMuted,
-    fontSize: font.body,
+    fontSize: font.small,
     marginTop: spacing.xs,
     textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   profileCard: {
     flexDirection: 'row',
@@ -352,7 +504,9 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     padding: spacing.md,
     gap: spacing.md,
+    marginBottom: spacing.xs,
   },
+  profileBody: { flex: 1 },
   username: {
     color: colors.text,
     fontSize: font.h3,
@@ -374,17 +528,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     flexWrap: 'wrap',
   },
-  rankDot: { width: 10, height: 10, borderRadius: 5 },
-  rankText: { fontSize: font.body, fontWeight: '700' },
+  rankDot: { width: 8, height: 8, borderRadius: 4 },
+  rankText: { fontSize: font.small, fontWeight: '700' },
   proBadge: {
     color: colors.gold,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '900',
     backgroundColor: colors.bgElevated,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
   },
@@ -393,113 +547,145 @@ const styles = StyleSheet.create({
     fontSize: font.small,
     marginLeft: 'auto',
   },
-  trophyCard: {
-    flexDirection: 'row',
+  trophyMini: {
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: 'rgba(255, 210, 77, 0.1)',
-    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 210, 77, 0.12)',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderWidth: 1,
     borderColor: colors.gold,
+  },
+  trophyMiniEmoji: { fontSize: 20 },
+  trophyMiniCount: {
+    color: colors.gold,
+    fontSize: font.small,
+    fontWeight: '900',
+  },
+  reminder: {
+    backgroundColor: 'rgba(124, 92, 255, 0.15)',
+    borderRadius: radius.md,
     padding: spacing.md,
-    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    marginBottom: spacing.sm,
   },
-  trophyEmoji: {
-    fontSize: 28,
+  reminderText: {
+    color: colors.primary,
+    fontWeight: '800',
+    textAlign: 'center',
   },
-  trophyBody: {
-    flex: 1,
+  weekly: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginBottom: spacing.sm,
   },
-  trophyTitle: {
+  weeklyTitle: {
     color: colors.gold,
     fontSize: font.h3,
     fontWeight: '900',
   },
-  trophySub: {
+  weeklySub: {
     color: colors.textMuted,
+    fontSize: font.small,
+    marginTop: 4,
+  },
+  wedgeHint: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  wedgeHintText: {
+    color: colors.textFaint,
     fontSize: font.small,
     fontWeight: '700',
   },
-  trophyChevron: {
+  customizeBlock: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  heroSection: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  heroSub: {
     color: colors.textFaint,
-    fontSize: 28,
-    fontWeight: '300',
+    fontSize: font.small,
+    textAlign: 'center',
+    marginTop: -4,
+    marginBottom: spacing.xs,
   },
   statsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   stat: {
     flex: 1,
     backgroundColor: colors.bgElevated,
     borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
   },
-  statValue: { fontSize: font.h3, fontWeight: '900' },
-  statLabel: { color: colors.textFaint, fontSize: font.small, marginTop: 2 },
+  statValue: { fontSize: font.body, fontWeight: '900' },
+  statLabel: { color: colors.textFaint, fontSize: 10, marginTop: 2 },
   shieldHint: {
     color: colors.success,
     fontSize: font.small,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  archiveCard: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.md,
+  modeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modeTile: {
+    width: '47%',
+    flexGrow: 1,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.cardBorder,
+    padding: spacing.md,
+    minHeight: 88,
   },
-  archiveTitle: {
+  modeEmoji: { fontSize: 22, marginBottom: 4 },
+  modeTitle: {
+    color: colors.text,
+    fontSize: font.body,
+    fontWeight: '800',
+  },
+  modeSub: {
+    color: colors.textMuted,
+    fontSize: font.small,
+    marginTop: 2,
+  },
+  partySection: {
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+  },
+  partyLabel: {
     color: colors.textMuted,
     fontSize: font.small,
     fontWeight: '800',
     letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
-  archiveCount: {
-    color: colors.text,
-    fontSize: font.h2,
-    fontWeight: '900',
-    marginTop: spacing.xs,
-  },
-  archiveSub: {
-    color: colors.primary,
-    fontSize: font.small,
-    marginTop: spacing.xs,
-  },
-  musicRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.bgElevated,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  musicLabel: {
-    color: colors.text,
-    fontSize: font.body,
-    fontWeight: '700',
-  },
-  musicToggle: {
-    color: colors.textMuted,
-    fontSize: font.body,
-    fontWeight: '800',
-  },
-  musicOn: {
-    color: colors.gold,
-  },
-  actions: { gap: spacing.sm, marginTop: spacing.md },
   offlineNote: {
     color: colors.textFaint,
     fontSize: font.small,
     textAlign: 'center',
     marginTop: spacing.md,
   },
-});
+  });
+}

@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarView } from '../components/AvatarView';
@@ -11,6 +12,7 @@ import { ReactionBar } from '../components/ReactionBar';
 import { TriviaCard } from '../components/TriviaCard';
 import { WedgeTracker } from '../components/WedgeTracker';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 import { pickMatchQuestions } from '../data/questions';
 import { normalizeAvatar } from '../lib/avatars';
 import { buildShareGrid, nextDailyStreakWithShield, todayKey } from '../lib/daily';
@@ -41,6 +43,7 @@ import {
   type ReactionEmoji,
 } from '../lib/reactions';
 import { speakQuestion, stopSpeaking } from '../lib/speech';
+import { isHarveyStylePack } from '../lib/voiceCatalog';
 import {
   applyResult,
   initDuel,
@@ -48,7 +51,16 @@ import {
   startRound,
 } from '../lib/matchStats';
 import type { RootStackParamList } from '../navigation';
-import { colors, font, radius, spacing } from '../theme';
+import { playQuestionChime } from '../lib/audio';
+import { countdownLabel, hostIntroLine } from '../lib/gameShow';
+import { canUsePictureRounds } from '../lib/entitlements';
+import { submitDailyScore } from '../lib/dailyLeaderboard';
+import { makeBot } from '../lib/ghost';
+import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
+import { bumpCategoryPlay } from '../lib/categoryStats';
+import { WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
+import type { ThemeColors } from '../theme';
+import { font, radius, spacing } from '../theme';
 import type {
   Category,
   MatchSummary,
@@ -65,13 +77,21 @@ type Phase = 'searching' | 'countdown' | 'playing';
 export function GameScreen({ navigation, route }: Props) {
   const params = route.params ?? { mode: 'solo' as const };
   const { profile, update } = useProfile();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeGameStyles(colors), [colors]);
 
   const [opponent, setOpponent] = useState<OpponentInfo | null>(params.opponent ?? null);
   const [matchId, setMatchId] = useState<string | undefined>(params.matchId);
   const [questionSeed, setQuestionSeed] = useState(params.questionSeed);
   const [searchLabel, setSearchLabel] = useState('Finding party players…');
 
+  const botDiff = params.botDifficulty ?? 'easy';
+  const isSoloLike = params.mode === 'solo' || params.mode === 'practice';
+  const isRanked = params.mode === 'ranked';
+
   const ghost = useMemo<Ghost>(() => {
+    if (isSoloLike) return makeBot(botDiff, 0);
+    if (isRanked && !opponent?.isHuman) return makeBot(botDiff, 0);
     if (opponent && !opponent.isHuman) return makeGhost(profile?.elo ?? 1000);
     if (opponent?.isHuman) {
       return {
@@ -82,23 +102,43 @@ export function GameScreen({ navigation, route }: Props) {
       };
     }
     return makeGhost(profile?.elo ?? 1000);
-  }, [opponent, profile?.elo]);
+  }, [opponent, profile?.elo, isSoloLike, isRanked, botDiff]);
 
   const questions = useMemo<Question[]>(() => {
-    return pickMatchQuestions(7, questionSeed, {
+    const includePictures =
+      canUsePictureRounds(profile?.isPro ?? false) &&
+      !params.ugcPackId &&
+      (params.mode === 'ranked' || params.mode === 'practice' || params.mode === 'solo');
+    const count =
+      params.ugcPackId && params.questionIds?.length
+        ? Math.min(params.questionIds.length, 15)
+        : 7;
+    return pickMatchQuestions(count, questionSeed, {
       isPro: profile?.isPro ?? false,
       questionIds: params.questionIds,
+      category: params.category,
+      includePictures,
     });
-  }, [questionSeed, profile?.isPro, params.questionIds]);
+  }, [
+    questionSeed,
+    profile?.isPro,
+    params.questionIds,
+    params.category,
+    params.mode,
+    params.ugcPackId,
+  ]);
 
-  const [phase, setPhase] = useState<Phase>(params.mode === 'quick' ? 'searching' : 'countdown');
+  const [phase, setPhase] = useState<Phase>(
+    params.mode === 'quick' || isRanked ? 'searching' : 'countdown'
+  );
   const [countdown, setCountdown] = useState(3);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
+  const [revealAnswers, setRevealAnswers] = useState(false);
+  const [optionsVisible, setOptionsVisible] = useState(false);
   const [youScore, setYouScore] = useState(0);
   const [oppScore, setOppScore] = useState(0);
-  const [collectedWedges, setCollectedWedges] = useState<Category[]>([]);
   const [liveStats, setLiveStats] = useState<PlayerLiveStats[]>([]);
   const [celebration, setCelebration] = useState<CelebrationPayload | null>(null);
   const [reactions, setReactions] = useState<PartyReaction[]>([]);
@@ -107,6 +147,10 @@ export function GameScreen({ navigation, route }: Props) {
   const matchStreak = useRef(0);
   const roundStart = useRef(0);
   const progress = useRef(new Animated.Value(1)).current;
+  const countdownScale = useRef(new Animated.Value(1)).current;
+  const optionAnims = useRef(
+    [0, 1, 2, 3].map(() => new Animated.Value(0))
+  ).current;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const oppScoreRef = useRef(0);
   const statsInit = useRef(false);
@@ -129,19 +173,74 @@ export function GameScreen({ navigation, route }: Props) {
   }, [params.lobbyId, showReactions]);
 
   useEffect(() => {
+    if (phase !== 'countdown') return;
+    countdownScale.setValue(0.6);
+    Animated.spring(countdownScale, {
+      toValue: 1,
+      friction: 4,
+      useNativeDriver: true,
+    }).start();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [phase, countdown, countdownScale]);
+
+  useEffect(() => {
     if (phase !== 'playing' || !profile) return;
     const q = questions[index];
     if (!q) return;
-    void speakQuestion(q.prompt, {
-      preset: profile.voicePreset,
-      enabled: profile.voiceEnabled,
-    });
-  }, [phase, index, questions, profile?.voicePreset, profile?.voiceEnabled, profile]);
+
+    setOptionsVisible(false);
+    setRevealAnswers(false);
+    optionAnims.forEach((a) => a.setValue(0));
+
+    let cancelled = false;
+
+    const showOptions = () => {
+      if (cancelled) return;
+      setOptionsVisible(true);
+      Animated.stagger(
+        80,
+        optionAnims.map((anim) =>
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 280,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          })
+        )
+      ).start();
+    };
+
+    const runVoice = async () => {
+      if (profile.voiceEnabled) {
+        await speakQuestion(hostIntroLine(index + 1, questions.length, q.category), {
+          preset: profile.voicePreset,
+          enabled: true,
+        });
+        if (cancelled) return;
+        await speakQuestion(q.prompt, {
+          preset: profile.voicePreset,
+          enabled: true,
+        });
+        if (cancelled) return;
+        void playQuestionChime();
+        setTimeout(showOptions, 350);
+      } else {
+        setTimeout(showOptions, 500);
+      }
+    };
+
+    void runVoice();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, index, questions, profile?.voicePreset, profile?.voiceEnabled, profile, optionAnims]);
 
   // Quick match: try Supabase Realtime queue, fall back to ghost.
   useEffect(() => {
-    if (params.mode !== 'quick' || !profile || params.opponent) {
-      if (params.mode !== 'quick') setPhase('countdown');
+    const wantsMatchmaking = params.mode === 'quick' || params.mode === 'ranked';
+    if (!wantsMatchmaking || !profile || params.opponent) {
+      if (!wantsMatchmaking) setPhase('countdown');
       return;
     }
 
@@ -242,17 +341,20 @@ export function GameScreen({ navigation, route }: Props) {
         : null;
     const dailyStreak = dailyResult?.streak ?? profile.dailyStreak;
 
-    const profilePatch = {
-      elo: newElo,
-      wins: profile.wins + (outcome === 'win' ? 1 : 0),
-      losses: profile.losses + (outcome === 'loss' ? 1 : 0),
-      draws: profile.draws + (outcome === 'draw' ? 1 : 0),
-      streak,
-      bestStreak: Math.max(profile.bestStreak, streak),
-      dailyStreak,
-      lastDailyDate: params.mode === 'daily' ? dateKey : profile.lastDailyDate,
-      streakShield: dailyResult?.consumedShield ? false : profile.streakShield,
-    };
+    const isSolo = params.mode === 'solo' || params.mode === 'practice';
+    const profilePatch = isSolo
+      ? {}
+      : {
+          elo: newElo,
+          wins: profile.wins + (outcome === 'win' ? 1 : 0),
+          losses: profile.losses + (outcome === 'loss' ? 1 : 0),
+          draws: profile.draws + (outcome === 'draw' ? 1 : 0),
+          streak,
+          bestStreak: Math.max(profile.bestStreak, streak),
+          dailyStreak,
+          lastDailyDate: params.mode === 'daily' ? dateKey : profile.lastDailyDate,
+          streakShield: dailyResult?.consumedShield ? false : profile.streakShield,
+        };
 
     let partyRank: number | undefined;
     let partySize: number | undefined;
@@ -284,7 +386,6 @@ export function GameScreen({ navigation, route }: Props) {
       shareGrid,
       partyRank,
       partySize,
-      collectedWedges,
     };
 
     const correctCategories = rounds.current
@@ -292,20 +393,51 @@ export function GameScreen({ navigation, route }: Props) {
       .map((r) => questions.find((q) => q.id === r.questionId)?.category)
       .filter((c): c is Category => Boolean(c));
 
-    const { profile: enriched, newlyUnlocked } = finalizeProfileAfterMatch(
+    const { profile: enriched, newlyUnlocked, newWedges } = finalizeProfileAfterMatch(
       profile,
       profilePatch,
       summaryBase,
       correctCategories
     );
 
+    const playCat = params.category ?? correctCategories[correctCategories.length - 1] ?? 'General';
+    let seasonPass = ensureSeasonPass(profile.seasonPass);
+    let xpGain = 0;
+    let seasonXpSnapshot;
+    if (params.mode !== 'practice') {
+      const postWins = isSolo ? profile.wins : profile.wins + (outcome === 'win' ? 1 : 0);
+      const postLosses = isSolo ? profile.losses : profile.losses + (outcome === 'loss' ? 1 : 0);
+      const xpBundle = buildSeasonXpSnapshot(seasonPass, outcome, profile.isPro, postWins, postLosses);
+      seasonPass = xpBundle.pass;
+      xpGain = xpBundle.xpGain;
+      seasonXpSnapshot = xpBundle.snapshot;
+    }
+    const dailyBests = { ...enriched.stats.dailyBests };
+    if (params.mode === 'daily') {
+      dailyBests[dateKey] = Math.max(dailyBests[dateKey] ?? 0, you);
+      void submitDailyScore(enriched, you);
+    }
+    const stats = {
+      ...bumpCategoryPlay(enriched, playCat, matchStreak.current),
+      seasonXp: (enriched.stats.seasonXp ?? 0) + xpGain,
+      dailyBests,
+    };
+
     void update({
       ...profilePatch,
       achievementState: enriched.achievementState,
-      stats: enriched.stats,
+      stats,
+      seasonPass,
     });
 
-    const milestones = detectMilestones(profile, summaryBase, {
+    const summaryWithWedges: MatchSummary = {
+      ...summaryBase,
+      collectedWedges: newWedges,
+    };
+
+    const milestones = isSolo
+      ? []
+      : detectMilestones(profile, summaryWithWedges, {
       wins: nextWins,
       streak,
       dailyStreak,
@@ -319,9 +451,9 @@ export function GameScreen({ navigation, route }: Props) {
     }));
 
     navigation.replace('Result', {
-      summary: { ...summaryBase, milestones, achievementUnlocks },
+      summary: { ...summaryWithWedges, milestones, achievementUnlocks, seasonXp: seasonXpSnapshot },
     });
-  }, [profile, oppScore, ghost, opponent, update, navigation, params, collectedWedges, questions]);
+  }, [profile, oppScore, ghost, opponent, update, navigation, params, questions]);
 
   const advance = useCallback(() => {
     clearTimers();
@@ -332,6 +464,8 @@ export function GameScreen({ navigation, route }: Props) {
       setIndex((i) => i + 1);
       setSelected(null);
       setLocked(false);
+      setRevealAnswers(false);
+      setOptionsVisible(false);
     }
   }, [index, questions.length, finishMatch, clearTimers, progress]);
 
@@ -345,29 +479,30 @@ export function GameScreen({ navigation, route }: Props) {
       if (correct) {
         matchStreak.current += 1;
         void hapticSuccess();
-        const streakFx = streakCelebration(matchStreak.current, q.category);
-        setCollectedWedges((w) => {
-          const isNew = !w.includes(q.category);
-          if (streakFx) {
-            setCelebration(streakFx);
-            if (profile) {
-              void announceCelebration(streakFx, {
-                preset: profile.voicePreset,
-                enabled: profile.voiceEnabled,
-              });
-            }
-          } else if (isNew) {
-            const wedgeFx = wedgeCelebration(q.category);
-            setCelebration(wedgeFx);
-            if (profile) {
-              void announceCelebration(wedgeFx, {
-                preset: profile.voicePreset,
-                enabled: profile.voiceEnabled,
-              });
-            }
+        const harvey = profile?.voicePreset
+          ? isHarveyStylePack(profile.voicePreset)
+          : false;
+        const streakFx = streakCelebration(matchStreak.current, q.category, harvey);
+        const prevCorrect = profile?.stats.categoryCorrect[q.category] ?? 0;
+        const willEarnWedge = prevCorrect + 1 === WEDGE_UNLOCK_CORRECT;
+        if (willEarnWedge) {
+          const wedgeFx = wedgeCelebration(q.category, harvey);
+          setCelebration(wedgeFx);
+          if (profile) {
+            void announceCelebration(wedgeFx, {
+              preset: profile.voicePreset,
+              enabled: profile.voiceEnabled,
+            });
           }
-          return isNew ? [...w, q.category] : w;
-        });
+        } else if (streakFx) {
+          setCelebration(streakFx);
+          if (profile) {
+            void announceCelebration(streakFx, {
+              preset: profile.voicePreset,
+              enabled: profile.voiceEnabled,
+            });
+          }
+        }
       } else {
         matchStreak.current = 0;
       }
@@ -388,12 +523,23 @@ export function GameScreen({ navigation, route }: Props) {
 
   const onSelect = useCallback(
     (i: number) => {
-      if (locked) return;
+      if (locked || !optionsVisible) return;
       setLocked(true);
       setSelected(i);
-      recordAndAdvance(i);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const revealTimer = setTimeout(() => {
+        setRevealAnswers(true);
+        void Haptics.notificationAsync(
+          i === questions[index]?.answer
+            ? Haptics.NotificationFeedbackType.Success
+            : Haptics.NotificationFeedbackType.Error
+        );
+        const advanceTimer = setTimeout(() => recordAndAdvance(i), 900);
+        timers.current.push(advanceTimer);
+      }, 650);
+      timers.current.push(revealTimer);
     },
-    [locked, recordAndAdvance]
+    [locked, optionsVisible, recordAndAdvance, questions, index]
   );
 
   useEffect(() => {
@@ -408,6 +554,7 @@ export function GameScreen({ navigation, route }: Props) {
     }).start();
 
     // Ghost / bot simulates opponent when not live-synced from a human.
+    if (params.mode === 'solo' || params.mode === 'practice') return;
     if (!opponent?.isHuman || params.mode === 'party') {
       const move = ghostAnswer(ghost, questions[index]);
       const oppId = opponent?.id ?? 'ghost';
@@ -431,7 +578,9 @@ export function GameScreen({ navigation, route }: Props) {
     const timeout = setTimeout(() => {
       if (!locked) {
         setLocked(true);
-        recordAndAdvance(null);
+        setRevealAnswers(true);
+        const advanceTimer = setTimeout(() => recordAndAdvance(null), 700);
+        timers.current.push(advanceTimer);
       }
     }, ROUND_TIME_MS);
     timers.current.push(timeout);
@@ -452,15 +601,38 @@ export function GameScreen({ navigation, route }: Props) {
   }
 
   if (phase === 'countdown') {
+    const isSolo = params.mode === 'solo' || params.mode === 'practice';
     return (
       <SafeAreaView style={styles.center}>
-        <View style={styles.vsRow}>
-          <AvatarView avatar={profile!.avatar} size={64} showRing />
-          <Text style={styles.vsX}>VS</Text>
-          <AvatarView avatar={normalizeAvatar(opponent?.avatar ?? { emoji: '🤖', color: '#7C5CFF' })} size={64} showRing />
-        </View>
-        <Text style={styles.vs}>{profile?.username}  vs  {oppName}</Text>
-        <Text style={styles.countdown}>{countdown === 0 ? 'GO!' : countdown}</Text>
+        {isSolo ? (
+          <>
+            <AvatarView avatar={profile!.avatar} size={80} showRing />
+            <Text style={styles.soloTitle}>
+              {params.ugcPackTitle ? `📦 ${params.ugcPackTitle}` : 'Quick Match'}
+            </Text>
+            <Text style={styles.soloSub}>
+              {params.ugcPackTitle ? 'Community pack' : 'Solo run · race the clock'}
+            </Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.vsRow}>
+              <AvatarView avatar={profile!.avatar} size={64} showRing />
+              <Text style={styles.vsX}>VS</Text>
+              <AvatarView avatar={normalizeAvatar(opponent?.avatar ?? { emoji: '🤖', color: '#7C5CFF' })} size={64} showRing />
+            </View>
+            <Text style={styles.vs}>{profile?.username}  vs  {oppName}</Text>
+          </>
+        )}
+        <Animated.Text
+          style={[
+            styles.countdown,
+            { transform: [{ scale: countdownScale }] },
+          ]}
+        >
+          {countdownLabel(countdown)}
+        </Animated.Text>
+        <Text style={styles.countdownHint}>Live from the Trivia Dash studio</Text>
       </SafeAreaView>
     );
   }
@@ -486,78 +658,109 @@ export function GameScreen({ navigation, route }: Props) {
       <MatchCelebrationOverlay payload={celebration} onDone={() => setCelebration(null)} />
       <FloatingReactions reactions={reactions} />
 
-      {liveStats.length > 0 && (
-        <LiveStatsPanel
-          players={liveStats}
-          layout="duel"
-          questionIndex={index + 1}
-          totalQuestions={questions.length}
-          live
-        />
-      )}
-
-      <WedgeTracker collected={collectedWedges} />
-
       <View style={styles.timerTrack}>
         <Animated.View style={[styles.timerFill, { width: widthInterpolate, backgroundColor: catTheme.fill }]} />
       </View>
 
-      <View style={styles.qWrap}>
-        <TriviaCard
-          category={q.category}
-          prompt={q.prompt}
-          questionNum={index + 1}
-          total={questions.length}
-          year={q.year}
-          tier={q.tier}
-          onSpeak={() =>
-            profile &&
-            void speakQuestion(q.prompt, {
-              preset: profile.voicePreset,
-              enabled: profile.voiceEnabled,
-            })
-          }
-        />
-      </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {liveStats.length > 0 && params.mode !== 'solo' && params.mode !== 'practice' && (
+          <LiveStatsPanel
+            players={liveStats}
+            layout="duel"
+            questionIndex={index + 1}
+            totalQuestions={questions.length}
+            live
+          />
+        )}
 
-      {showReactions && <ReactionBar onReact={onReact} disabled={locked} />}
+        {profile && !isSoloLike && (
+          <WedgeTracker profile={profile} highlight={q.category} />
+        )}
 
-      <View style={styles.options}>
-        {q.options.map((opt, i) => {
-          const isSelected = selected === i;
-          const reveal = locked;
-          const isAnswer = i === q.answer;
-          let bg = colors.card;
-          let border = catTheme.fill;
-          if (reveal && isAnswer) {
-            bg = colors.success;
-            border = colors.success;
-          } else if (reveal && isSelected && !isAnswer) {
-            bg = colors.danger;
-            border = colors.danger;
-          }
-          return (
-            <Pressable
-              key={i}
-              onPress={() => onSelect(i)}
-              disabled={locked}
-              style={({ pressed }) => [
-                styles.option,
-                { backgroundColor: bg, borderColor: border, borderWidth: 2 },
-                pressed && !locked && { opacity: 0.9 },
-              ]}
-            >
-              <Text style={styles.optionLetter}>{String.fromCharCode(65 + i)}</Text>
-              <Text style={styles.optionText}>{opt}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        <View style={styles.qWrap}>
+          <TriviaCard
+            category={q.category}
+            prompt={q.prompt}
+            questionNum={index + 1}
+            total={questions.length}
+            year={q.year}
+            tier={q.tier}
+            imageUrl={q.imageUrl}
+            compact
+            onSpeak={() =>
+              profile &&
+              void speakQuestion(q.prompt, {
+                preset: profile.voicePreset,
+                enabled: profile.voiceEnabled,
+              })
+            }
+          />
+        </View>
+
+        {showReactions && <ReactionBar onReact={onReact} disabled={locked} />}
+
+        <View style={styles.options}>
+          {!optionsVisible && (
+            <Text style={styles.optionsWait}>Think about it… answers coming up</Text>
+          )}
+          {q.options.map((opt, i) => {
+            const isSelected = selected === i;
+            const reveal = revealAnswers;
+            const isAnswer = i === q.answer;
+            let bg = colors.card;
+            let border = catTheme.fill;
+            if (reveal && isAnswer) {
+              bg = colors.success;
+              border = colors.success;
+            } else if (reveal && isSelected && !isAnswer) {
+              bg = colors.danger;
+              border = colors.danger;
+            }
+            const opacity = optionAnims[i] ?? optionAnims[0];
+            return (
+              <Animated.View
+                key={i}
+                style={{
+                  opacity: optionsVisible ? opacity : 0,
+                  transform: [
+                    {
+                      translateY: opacity.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [12, 0],
+                      }),
+                    },
+                  ],
+                }}
+              >
+                <Pressable
+                  onPress={() => onSelect(i)}
+                  disabled={locked || !optionsVisible}
+                  style={({ pressed }) => [
+                    styles.option,
+                    { backgroundColor: bg, borderColor: border, borderWidth: 2 },
+                    pressed && !locked && optionsVisible && { opacity: 0.9 },
+                    locked && isSelected && !reveal && styles.optionLocked,
+                  ]}
+                >
+                  <Text style={styles.optionLetter}>{String.fromCharCode(65 + i)}</Text>
+                  <Text style={styles.optionText}>{opt}</Text>
+                </Pressable>
+              </Animated.View>
+            );
+          })}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function makeGameStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -598,10 +801,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: spacing.md,
   },
+  soloTitle: {
+    color: colors.text,
+    fontSize: font.h2,
+    fontWeight: '900',
+    marginTop: spacing.md,
+  },
+  soloSub: {
+    color: colors.textMuted,
+    fontSize: font.body,
+    marginBottom: spacing.md,
+  },
   countdown: {
     color: colors.primary,
     fontSize: 96,
     fontWeight: '900',
+  },
+  countdownHint: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   timerTrack: {
     height: 8,
@@ -614,22 +835,39 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.warning,
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
   qWrap: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   options: {
     gap: spacing.sm,
-    marginTop: 'auto',
-    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  optionsWait: {
+    color: colors.textMuted,
+    fontSize: font.small,
+    fontWeight: '700',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: spacing.xs,
   },
   option: {
-    minHeight: 56,
+    minHeight: 52,
     borderRadius: radius.md,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     gap: spacing.md,
+  },
+  optionLocked: {
+    borderColor: colors.gold,
+    borderWidth: 3,
   },
   optionLetter: {
     color: colors.gold,
@@ -643,4 +881,5 @@ const styles = StyleSheet.create({
     fontSize: font.body,
     fontWeight: '700',
   },
-});
+  });
+}
