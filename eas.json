@@ -20,7 +20,8 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_AI_VOICE_ENABLED": "true"
+        "EXPO_PUBLIC_AI_VOICE_ENABLED": "true",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_rohSpQJUpYIIjVWBiWdgcbWceCJ"
       },
       "android": {
         "buildType": "app-bundle"

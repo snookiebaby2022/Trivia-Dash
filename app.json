@@ -49,6 +49,7 @@
       "bundler": "metro"
     },
     "extra": {
+      "revenueCatAndroidKey": "goog_rohSpQJUpYIIjVWBiWdgcbWceCJ",
       "eas": {
         "projectId": "620b1064-6081-4b91-95bc-dd4a3e0f2660"
       }
