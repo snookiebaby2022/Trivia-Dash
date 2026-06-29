@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.lizzi.triviadash",
-      "versionCode": 20,
+      "versionCode": 21,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0B16"
