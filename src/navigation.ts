@@ -66,4 +66,6 @@ export type RootStackParamList = {
   LiveHost: undefined;
   PackBuilder: undefined;
   MatchReplay: { summary: MatchSummary };
+  SeasonalEvents: undefined;
+  NichePacks: undefined;
 };

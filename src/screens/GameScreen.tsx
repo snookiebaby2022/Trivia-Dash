@@ -76,6 +76,10 @@ import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
 import { bumpCategoryPlay } from '../lib/categoryStats';
 import { calculateCategoryStreakBonus } from '../lib/categoryStreaks';
 import { WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
+import { DynamicHost } from '../components/DynamicHost';
+import { getReaction, type HostReaction } from '../lib/personality';
+import { onCorrectAnswer as crowdCorrect, onWrongAnswer as crowdWrong, onNewRecord, onGameStart, onGameOver, resetCrowd } from '../lib/crowd';
+import { captureMoment, buildHighlightReel } from '../lib/highlightReel';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
 import type {
@@ -182,6 +186,9 @@ export function GameScreen({ navigation, route }: Props) {
   const [timedLeftMs, setTimedLeftMs] = useState(90_000);
   const [screenShake, setScreenShake] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [hostReaction, setHostReaction] = useState<HostReaction | null>(null);
+  const [hostVisible, setHostVisible] = useState(false);
+  const highlightMoments = useRef<ReturnType<typeof captureMoment>[]>([]);
   const [timerUrgent, setTimerUrgent] = useState(false);
 
   const rounds = useRef<RoundResult[]>([]);
@@ -299,6 +306,7 @@ export function GameScreen({ navigation, route }: Props) {
     const wantsMatchmaking = params.mode === 'quick' || params.mode === 'ranked';
     if (!wantsMatchmaking || !profile || params.opponent) {
       if (!wantsMatchmaking) setPhase('countdown');
+      resetCrowd();
       return;
     }
 
@@ -323,7 +331,7 @@ export function GameScreen({ navigation, route }: Props) {
         });
         setSearchLabel('No one online — practice bot joined');
       }
-      setTimeout(() => setPhase('countdown'), 900);
+      setTimeout(() => { setPhase('countdown'); resetCrowd(); }, 900);
     });
 
     return () => {
@@ -370,6 +378,7 @@ export function GameScreen({ navigation, route }: Props) {
     if (phase !== 'countdown') return;
     if (countdown <= 0) {
       setPhase('playing');
+      onGameStart();
       return;
     }
     const t = setTimeout(() => setCountdown((c) => c - 1), 700);
@@ -526,6 +535,12 @@ export function GameScreen({ navigation, route }: Props) {
       unlockedAchievementIds: newlyUnlocked.map((a) => a.id),
     });
 
+    const reel = buildHighlightReel(rounds.current, youScore, oppScoreRef.current, 
+      youScore > oppScoreRef.current ? 'win' : youScore < oppScoreRef.current ? 'loss' : 'draw');
+    if (reel.moments.length > 0) {
+      highlightMoments.current.push(...reel.moments);
+    }
+    onGameOver(youScore > oppScoreRef.current);
     navigation.replace('Result', {
       summary: { ...summaryWithWedges, milestones, achievementUnlocks, seasonXp: seasonXpSnapshot },
     });
@@ -587,6 +602,26 @@ export function GameScreen({ navigation, route }: Props) {
           setTimeout(() => setComboFlash(null), 900);
         }
         void hapticSuccess();
+        crowdCorrect(matchStreak.current);
+        const catStreakLocal = categoryStreaks.current[q.category] ?? 0;
+        const reaction = getReaction(
+          matchStreak.current >= 10 ? 'streak_10' :
+          matchStreak.current >= 7 ? 'streak_7' :
+          matchStreak.current >= 5 ? 'streak_5' :
+          matchStreak.current >= 3 ? 'streak_3' :
+          matchStreak.current === 1 ? 'first_correct' :
+          ms < 1000 ? 'fast_answer' :
+          ms > ROUND_TIME_MS - 2000 ? 'close_answer' : 'first_correct',
+          { playerName: profile?.username, streak: matchStreak.current, score: youScore }
+        );
+        setHostReaction(reaction);
+        setHostVisible(true);
+        if (ms < 1000) {
+          highlightMoments.current.push(captureMoment('speed_demon', rounds.current.length - 1, { ms }));
+        }
+        if (matchStreak.current >= 3) {
+          highlightMoments.current.push(captureMoment('streak_milestone', rounds.current.length - 1, { streak: matchStreak.current }));
+        }
         const harvey = profile?.voicePreset
           ? isHarveyStylePack(profile.voicePreset)
           : false;
@@ -614,6 +649,13 @@ export function GameScreen({ navigation, route }: Props) {
       } else {
         matchStreak.current = 0;
         categoryStreaks.current[q.category] = 0;
+        crowdWrong();
+        const wrongReaction = getReaction(
+          matchStreak.current === 0 && rounds.current.length > 1 ? 'streak_broken' : 'first_wrong',
+          { playerName: profile?.username }
+        );
+        setHostReaction(wrongReaction);
+        setHostVisible(true);
         if (isEndless) {
           endlessWrong.current += 1;
           if (endlessWrong.current >= 3) {
@@ -956,6 +998,13 @@ export function GameScreen({ navigation, route }: Props) {
           })}
         </View>
       </ScrollView>
+      <DynamicHost
+        line={hostReaction?.line ?? ''}
+        emoji={hostReaction?.emoji ?? '🎙'}
+        emphasis={hostReaction?.emphasis ?? 'normal'}
+        visible={hostVisible}
+        onComplete={() => setHostVisible(false)}
+      />
     </SafeAreaView>
     </ScreenShake>
   );

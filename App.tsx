@@ -27,6 +27,8 @@ import { FriendsScreen } from './src/screens/FriendsScreen';
 import { LiveHostScreen } from './src/screens/LiveHostScreen';
 import { PackBuilderScreen } from './src/screens/PackBuilderScreen';
 import { MatchReplayScreen } from './src/screens/MatchReplayScreen';
+import { SeasonalEventsScreen } from './src/screens/SeasonalEventsScreen';
+import { NichePacksScreen } from './src/screens/NichePacksScreen';
 import { DailyLeaderboardScreen } from './src/screens/DailyLeaderboardScreen';
 import { FriendPartyScreen } from './src/screens/FriendPartyScreen';
 import { LeaderboardScreen } from './src/screens/LeaderboardScreen';
@@ -142,6 +144,8 @@ function AppNavigation() {
             component={MatchReplayScreen}
             options={{ title: 'Match Replay' }}
           />
+          <Stack.Screen name="SeasonalEvents" component={SeasonalEventsScreen} options={{ title: 'Events' }} />
+          <Stack.Screen name="NichePacks" component={NichePacksScreen} options={{ title: 'Fandom Packs' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </>

@@ -16,7 +16,21 @@ export type Category =
   | 'Animals'
   | 'Politics'
   | 'Space'
-  | 'Mythology';
+  | 'Mythology'
+  | 'Anime'
+  | 'K-Pop'
+  | 'Marvel'
+  | 'DC'
+  | 'Star Wars'
+  | 'Harry Potter'
+  | 'Gaming'
+  | 'NFL'
+  | 'NBA'
+  | 'Soccer'
+  | 'Taylor Swift'
+  | 'Disney'
+  | 'True Crime'
+  | 'Internet Culture';
 
 export type QuestionTier = 'free' | 'pro';
 

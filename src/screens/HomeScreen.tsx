@@ -22,6 +22,7 @@ import { ProfileBanner } from '../components/ProfileBanner';
 import { CategoryWheel } from '../components/CategoryWheel';
 import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { SocialFeed } from '../components/SocialFeed';
 import { StreakWidget } from '../components/StreakWidget';
 import { ProUpgradeCard } from '../components/ProUpgradeCard';
 import { RewardedOfferCard } from '../components/RewardedOfferCard';
@@ -44,6 +45,9 @@ import { isMatchmakingAvailable } from '../lib/matchmaking';
 import { dismissDailyReminder, shouldShowDailyReminder } from '../lib/reminders';
 import { hasCompletedWalkthrough } from '../lib/onboarding';
 import { getWeeklyEvent } from '../lib/weeklyEvent';
+import { getActiveEvent, getEventTimeRemaining } from '../lib/seasonalEvents';
+import { getOnlineFriendsCount } from '../lib/socialFeed';
+import { getPopularNichePacks } from '../lib/nichePacks';
 import { speakQuestion } from '../lib/speech';
 import { getLoginStreakState } from '../lib/streakRewards';
 import { refreshTriviaCache } from '../lib/triviaApi';
@@ -80,6 +84,8 @@ export function HomeScreen({ navigation }: Props) {
   const [showPro, setShowPro] = useState(false);
   const [rewardLoading, setRewardLoading] = useState<'daily' | 'shield' | 'powerups' | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<ReturnType<typeof getActiveEvent>>(null);
+  const [onlineCount, setOnlineCount] = useState(0);
   const styles = useMemo(() => makeHomeStyles(colors), [colors]);
 
   useFocusEffect(
@@ -93,6 +99,8 @@ export function HomeScreen({ navigation }: Props) {
       void refreshTriviaCache().then((qs) => {
         if (qs.length) setBonusQuestions(qs);
       });
+      setActiveEvent(getActiveEvent());
+      setOnlineCount(getOnlineFriendsCount());
     }, [profile, loading])
   );
 
@@ -176,6 +184,12 @@ export function HomeScreen({ navigation }: Props) {
 
         <StreakWidget />
 
+        {onlineCount > 0 && (
+          <View style={styles.socialBar}>
+            <Text style={styles.socialText}>🟢 {onlineCount} friend{onlineCount !== 1 ? 's' : ''} online</Text>
+          </View>
+        )}
+
         <ProfileBanner
           profile={profile}
           rankColor={rank.color}
@@ -238,6 +252,20 @@ export function HomeScreen({ navigation }: Props) {
             Grind {weekly.category} · {profile.isPro ? '+25% season XP' : 'Unlock everything for bonus XP'}
           </Text>
         </Pressable>
+
+        {activeEvent && (
+          <Pressable
+            style={styles.eventBanner}
+            onPress={() => navigation.navigate('SeasonalEvents')}
+          >
+            <Text style={styles.eventEmoji}>{activeEvent.emoji}</Text>
+            <View style={styles.eventBody}>
+              <Text style={styles.eventTitle}>{activeEvent.title}</Text>
+              <Text style={styles.eventSub}>{activeEvent.subtitle}</Text>
+            </View>
+            <Text style={styles.eventChevron}>→</Text>
+          </Pressable>
+        )}
 
         <CategoryWheel
           profile={profile}
@@ -326,7 +354,7 @@ export function HomeScreen({ navigation }: Props) {
           <Stat label="Correct" value={String(profile.stats.totalCorrect)} color={colors.gold} styles={styles} />
         </View>
 
-        <PlayGamesPanel />
+        <SocialFeed limit={5} />
 
         {(profile.streakShieldCount ?? (profile.streakShield ? 1 : 0)) > 0 && (
           <Text style={styles.shieldHint}>🛡 Streak shield{((profile.streakShieldCount ?? 1) > 1) ? ` ×${profile.streakShieldCount}` : ''} active</Text>
@@ -415,6 +443,20 @@ export function HomeScreen({ navigation }: Props) {
             title="Friends"
             sub="Social"
             onPress={() => navigation.navigate('Friends')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🎪"
+            title="Events"
+            sub="Weekly tournaments"
+            onPress={() => navigation.navigate('SeasonalEvents')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🔥"
+            title="Fandom"
+            sub="Niche packs"
+            onPress={() => navigation.navigate('NichePacks')}
             styles={styles}
           />
         </View>
@@ -784,6 +826,47 @@ function makeHomeStyles(colors: ThemeColors) {
     fontSize: font.small,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  socialBar: {
+    backgroundColor: colors.success + '15',
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    alignItems: 'center',
+  },
+  socialText: {
+    color: colors.success,
+    fontSize: font.small,
+    fontWeight: '700',
+  },
+  eventBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gold + '15',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.gold + '40',
+    padding: spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  eventEmoji: { fontSize: 32 },
+  eventBody: { flex: 1 },
+  eventTitle: {
+    color: colors.gold,
+    fontSize: font.body,
+    fontWeight: '900',
+  },
+  eventSub: {
+    color: colors.textMuted,
+    fontSize: font.small,
+    marginTop: 2,
+  },
+  eventChevron: {
+    color: colors.gold,
+    fontSize: font.h3,
+    fontWeight: '900',
   },
   });
 }
