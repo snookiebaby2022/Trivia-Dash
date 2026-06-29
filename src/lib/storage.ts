@@ -82,6 +82,7 @@ function migrateProfile(raw: Partial<Profile>): Profile {
     sfxEnabled: raw.sfxEnabled ?? false,
     isPro,
     streakShield: raw.streakShield ?? false,
+    streakShieldCount: raw.streakShieldCount ?? (raw.streakShield ? 1 : 0),
     coins: raw.coins ?? 0,
     loginStreak: raw.loginStreak ?? 0,
     lastLoginDate: raw.lastLoginDate,

@@ -1,14 +1,22 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthPanel } from '../components/AuthPanel';
 import { LegalLinks } from '../components/LegalLinks';
+import { SoundPackPicker } from '../components/SoundPackPicker';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 import { requestAppRating } from '../lib/rateApp';
 import { resetWalkthrough } from '../lib/onboarding';
+import {
+  loadNotificationPrefs,
+  saveNotificationPrefs,
+  requestNotificationPermission,
+  setupNotificationsForProfile,
+  type NotificationPreferences,
+} from '../lib/notifications';
 import type { RootStackParamList } from '../navigation';
 import type { ColorScheme } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -16,9 +24,28 @@ import { font, radius, spacing } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
-  const { colors, scheme, preference, setPreference, toggleScheme } = useTheme();
+  const { colors, scheme, preference, colorBlind, setPreference, toggleScheme, toggleColorBlind } = useTheme();
   const { profile, setVoiceEnabled, setSfxEnabled, setProfilePhoto, setCoverPhoto, removeProfilePhoto, removeCoverPhoto } = useProfile();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences | null>(null);
+
+  useEffect(() => {
+    void loadNotificationPrefs().then(setNotifPrefs);
+  }, []);
+
+  const updateNotifPref = async (patch: Partial<NotificationPreferences>) => {
+    if (!notifPrefs) return;
+    const next = { ...notifPrefs, ...patch };
+    setNotifPrefs(next);
+    await saveNotificationPrefs(next);
+
+    if (next.enabled && patch.enabled !== false) {
+      const granted = await requestNotificationPermission();
+      if (granted && profile) {
+        await setupNotificationsForProfile(profile);
+      }
+    }
+  };
 
   const themeOptions: { id: ColorScheme | 'system'; label: string }[] = [
     { id: 'dark', label: 'Dark' },
@@ -59,6 +86,65 @@ export function SettingsScreen({ navigation }: Props) {
               />
             }
           />
+          <Row
+            colors={colors}
+            label="Color-blind mode"
+            hint="Adjusts colors for easier distinguishing"
+            right={
+              <Switch
+                value={colorBlind}
+                onValueChange={() => void toggleColorBlind()}
+                trackColor={{ false: colors.cardBorder, true: colors.primary }}
+                thumbColor={colors.text}
+              />
+            }
+          />
+        </Section>
+
+        <Section title="Notifications" colors={colors}>
+          <Row
+            colors={colors}
+            label="Enable notifications"
+            hint="Daily reminders and streak alerts"
+            right={
+              <Switch
+                value={notifPrefs?.enabled ?? false}
+                onValueChange={(v) => void updateNotifPref({ enabled: v })}
+                trackColor={{ false: colors.cardBorder, true: colors.primary }}
+                thumbColor={colors.text}
+              />
+            }
+          />
+          {notifPrefs?.enabled && (
+            <>
+              <Row
+                colors={colors}
+                label="Daily challenge reminder"
+                hint="Get reminded to play daily"
+                right={
+                  <Switch
+                    value={notifPrefs?.dailyReminder ?? true}
+                    onValueChange={(v) => void updateNotifPref({ dailyReminder: v })}
+                    trackColor={{ false: colors.cardBorder, true: colors.primary }}
+                    thumbColor={colors.text}
+                  />
+                }
+              />
+              <Row
+                colors={colors}
+                label="Streak alert"
+                hint="Alert at 8pm if streak at risk"
+                right={
+                  <Switch
+                    value={notifPrefs?.streakAlert ?? true}
+                    onValueChange={(v) => void updateNotifPref({ streakAlert: v })}
+                    trackColor={{ false: colors.cardBorder, true: colors.primary }}
+                    thumbColor={colors.text}
+                  />
+                }
+              />
+            </>
+          )}
         </Section>
 
         <Section title="Profile" colors={colors}>
@@ -109,6 +195,10 @@ export function SettingsScreen({ navigation }: Props) {
               />
             }
           />
+          <View style={{ padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
+            <Text style={{ color: colors.text, fontSize: font.body, fontWeight: '800', marginBottom: spacing.sm }}>Sound pack</Text>
+            <SoundPackPicker />
+          </View>
           <Pressable
             style={styles.actionRow}
             onPress={() => {

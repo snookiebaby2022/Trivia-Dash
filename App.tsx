@@ -10,6 +10,9 @@ import { ProfileProvider } from './src/context/ProfileContext';
 import { ShareCardProvider } from './src/context/ShareCardProvider';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { initAudio } from './src/lib/audio';
+import { initAnalytics } from './src/lib/analytics';
+import { initFriends } from './src/lib/friends';
+import { initOfflineSync } from './src/lib/offlineSync';
 import type { RootStackParamList } from './src/navigation';
 import { AchievementWallScreen } from './src/screens/AchievementWallScreen';
 import { GameScreen } from './src/screens/GameScreen';
@@ -17,6 +20,13 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { PassPlayGameScreen } from './src/screens/PassPlayGameScreen';
 import { PassPlaySetupScreen } from './src/screens/PassPlaySetupScreen';
 import { CategoryPracticeScreen } from './src/screens/CategoryPracticeScreen';
+import { CoinShopScreen } from './src/screens/CoinShopScreen';
+import { StatsScreen } from './src/screens/StatsScreen';
+import { TournamentScreen } from './src/screens/TournamentScreen';
+import { FriendsScreen } from './src/screens/FriendsScreen';
+import { LiveHostScreen } from './src/screens/LiveHostScreen';
+import { PackBuilderScreen } from './src/screens/PackBuilderScreen';
+import { MatchReplayScreen } from './src/screens/MatchReplayScreen';
 import { DailyLeaderboardScreen } from './src/screens/DailyLeaderboardScreen';
 import { FriendPartyScreen } from './src/screens/FriendPartyScreen';
 import { LeaderboardScreen } from './src/screens/LeaderboardScreen';
@@ -121,6 +131,17 @@ function AppNavigation() {
             component={LeaderboardScreen}
             options={{ title: 'Leaderboard' }}
           />
+          <Stack.Screen name="CoinShop" component={CoinShopScreen} options={{ title: 'Coin Shop' }} />
+          <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
+          <Stack.Screen name="Tournament" component={TournamentScreen} options={{ title: 'Tournament' }} />
+          <Stack.Screen name="Friends" component={FriendsScreen} options={{ title: 'Friends' }} />
+          <Stack.Screen name="LiveHost" component={LiveHostScreen} options={{ title: 'Live Host' }} />
+          <Stack.Screen name="PackBuilder" component={PackBuilderScreen} options={{ title: 'Question Pack Builder' }} />
+          <Stack.Screen
+            name="MatchReplay"
+            component={MatchReplayScreen}
+            options={{ title: 'Match Replay' }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </>
@@ -130,6 +151,8 @@ function AppNavigation() {
 export default function App() {
   useEffect(() => {
     void initAudio();
+    void initAnalytics();
+    void initFriends();
   }, []);
 
   return (

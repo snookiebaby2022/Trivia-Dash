@@ -36,6 +36,27 @@ export const lightColors = {
   bronze: '#B86E3A',
 };
 
+/** Color-blind friendly palettes (deuteranopia-safe: blue/orange). */
+export const colorBlindDarkColors = {
+  ...darkColors,
+  primary: '#5B9BD5',
+  primaryDark: '#4A80B8',
+  accent: '#ED7D31',
+  success: '#5B9BD5',
+  danger: '#ED7D31',
+  warning: '#FFC000',
+};
+
+export const colorBlindLightColors = {
+  ...lightColors,
+  primary: '#2E75B6',
+  primaryDark: '#1F5A8F',
+  accent: '#C55A11',
+  success: '#2E75B6',
+  danger: '#C55A11',
+  warning: '#BF9000',
+};
+
 export type ThemeColors = typeof darkColors;
 export type ColorScheme = 'dark' | 'light';
 

@@ -59,4 +59,11 @@ export type RootStackParamList = {
   };
   Result: { summary: MatchSummary };
   Leaderboard: undefined;
+  CoinShop: undefined;
+  Stats: undefined;
+  Tournament: undefined;
+  Friends: undefined;
+  LiveHost: undefined;
+  PackBuilder: undefined;
+  MatchReplay: { summary: MatchSummary };
 };

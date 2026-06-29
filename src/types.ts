@@ -30,6 +30,8 @@ export interface Question {
   tier: QuestionTier;
   /** Pro picture round — remote image URL. */
   imageUrl?: string;
+  /** Music round — remote audio clip URL (mp3/m4a). */
+  audioUrl?: string;
   /** User-created pack id when applicable. */
   packId?: string;
 }
@@ -115,6 +117,8 @@ export interface Profile {
   dailyExtraPlayDate?: string;
   /** Protects daily streak once if a day is missed. */
   streakShield: boolean;
+  /** Number of stacked streak shields (max 3). */
+  streakShieldCount?: number;
   /** Soft currency for power-ups and shop. */
   coins: number;
   /** Consecutive days the player claimed login rewards. */

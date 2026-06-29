@@ -21,7 +21,7 @@ export interface WalkthroughStep {
   title: string;
   body: string;
   /** Highlight a home feature for context */
-  feature?: 'daily' | 'wedges' | 'quick' | 'account';
+  feature?: 'daily' | 'wedges' | 'quick' | 'account' | 'shop' | 'stats' | 'friends' | 'tournament';
 }
 
 export function buildWalkthroughSteps(isSignedIn: boolean): WalkthroughStep[] {
@@ -53,6 +53,20 @@ export function buildWalkthroughSteps(isSignedIn: boolean): WalkthroughStep[] {
       body: 'Jump into a solo dash anytime — no waiting for opponents. Ranked mode pits you against real players or smart bots.',
       feature: 'quick',
     },
+    {
+      id: 'coins',
+      emoji: '🪙',
+      title: 'Coins & shop',
+      body: 'Earn coins with every correct answer. Spend them in the Coin Shop on avatar frames, badges, power-ups, and XP boosts.',
+      feature: 'shop',
+    },
+    {
+      id: 'social',
+      emoji: '👥',
+      title: 'Friends & tournaments',
+      body: 'Add friends, challenge them to duels, and compete in bracket tournaments for big coin prizes.',
+      feature: 'friends',
+    },
   ];
 
   if (!isSignedIn) {
@@ -69,7 +83,7 @@ export function buildWalkthroughSteps(isSignedIn: boolean): WalkthroughStep[] {
     id: 'ready',
     emoji: '🏁',
     title: 'You are on!',
-    body: 'The host is waiting. Tap Quick Match to start your first run, or try today\'s daily challenge.',
+    body: 'The host is waiting. Tap Quick Match to start your first run — your first 3 matches use easier questions to get you warmed up!',
   });
 
   return steps;

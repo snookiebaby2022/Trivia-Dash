@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProfile } from '../context/ProfileContext';
 import { AvatarView } from '../components/AvatarView';
 import { PlayGamesPanel } from '../components/PlayGamesPanel';
+import { WeeklyFriendFilter } from '../components/WeeklyFriendFilter';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { fetchLeaderboard, fetchScoreLeaderboard } from '../lib/leaderboard';
 import type { RootStackParamList } from '../navigation';
@@ -179,6 +180,8 @@ export function LeaderboardScreen(_props: Props) {
           <Text style={[styles.tabText, mode === 'elo' && styles.tabTextOn]}>ELO rating</Text>
         </Pressable>
       </View>
+
+      <WeeklyFriendFilter entries={entries.map((e) => ({ ...e, score: e.bestMatchScore ?? e.elo }))} />
 
       <PlayGamesPanel />
 

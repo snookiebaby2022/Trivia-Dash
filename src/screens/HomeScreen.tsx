@@ -22,6 +22,7 @@ import { ProfileBanner } from '../components/ProfileBanner';
 import { CategoryWheel } from '../components/CategoryWheel';
 import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { StreakWidget } from '../components/StreakWidget';
 import { ProUpgradeCard } from '../components/ProUpgradeCard';
 import { RewardedOfferCard } from '../components/RewardedOfferCard';
 import { VoicePicker } from '../components/VoicePicker';
@@ -172,6 +173,8 @@ export function HomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
         <Text style={styles.tagline}>{APP_TAGLINE}</Text>
+
+        <StreakWidget />
 
         <ProfileBanner
           profile={profile}
@@ -325,8 +328,8 @@ export function HomeScreen({ navigation }: Props) {
 
         <PlayGamesPanel />
 
-        {profile.streakShield && (
-          <Text style={styles.shieldHint}>🛡 Streak shield active</Text>
+        {(profile.streakShieldCount ?? (profile.streakShield ? 1 : 0)) > 0 && (
+          <Text style={styles.shieldHint}>🛡 Streak shield{((profile.streakShieldCount ?? 1) > 1) ? ` ×${profile.streakShieldCount}` : ''} active</Text>
         )}
 
         <View style={styles.modeGrid}>
@@ -384,6 +387,34 @@ export function HomeScreen({ navigation }: Props) {
             title="What's Pro?"
             sub="Free vs Pro"
             onPress={() => navigation.navigate('UnlockFeatures')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🛒"
+            title="Coin Shop"
+            sub="Spend coins"
+            onPress={() => navigation.navigate('CoinShop')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="📈"
+            title="My Stats"
+            sub="Detailed stats"
+            onPress={() => navigation.navigate('Stats')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="🏆"
+            title="Tournament"
+            sub="Bracket play"
+            onPress={() => navigation.navigate('Tournament')}
+            styles={styles}
+          />
+          <ModeTile
+            emoji="👥"
+            title="Friends"
+            sub="Social"
+            onPress={() => navigation.navigate('Friends')}
             styles={styles}
           />
         </View>

@@ -5,10 +5,13 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarView } from '../components/AvatarView';
+import { Confetti } from '../components/Confetti';
 import { FloatingReactions } from '../components/FloatingReactions';
 import { LiveStatsPanel } from '../components/LiveStatsPanel';
 import { MatchCelebrationOverlay } from '../components/MatchCelebrationOverlay';
+import { MusicAudioPlayer, stopMusicClip } from '../components/MusicAudioPlayer';
 import { ReactionBar } from '../components/ReactionBar';
+import { ScreenShake } from '../components/ScreenShake';
 import { PowerUpBar } from '../components/PowerUpBar';
 import { TriviaCard } from '../components/TriviaCard';
 import { WedgeTracker } from '../components/WedgeTracker';
@@ -53,6 +56,7 @@ import {
   type ReactionEmoji,
 } from '../lib/reactions';
 import { speakQuestion, speakLine, stopSpeaking } from '../lib/speech';
+import { playCorrectSound, playWrongSound, playLockInSound, playTickSound, startTensionMusic, stopTensionMusic } from '../lib/sfx';
 import { isHarveyStylePack } from '../lib/voiceCatalog';
 import {
   applyResult,
@@ -70,6 +74,7 @@ import { submitOnlineHighScore } from '../lib/leaderboard';
 import { makeBot } from '../lib/ghost';
 import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
 import { bumpCategoryPlay } from '../lib/categoryStats';
+import { calculateCategoryStreakBonus } from '../lib/categoryStreaks';
 import { WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -175,11 +180,15 @@ export function GameScreen({ navigation, route }: Props) {
   const [visibleOptions, setVisibleOptions] = useState<number[] | null>(null);
   const [comboFlash, setComboFlash] = useState<string | null>(null);
   const [timedLeftMs, setTimedLeftMs] = useState(90_000);
+  const [screenShake, setScreenShake] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [timerUrgent, setTimerUrgent] = useState(false);
 
   const rounds = useRef<RoundResult[]>([]);
   const matchStreak = useRef(0);
   const maxComboStreak = useRef(0);
   const endlessWrong = useRef(0);
+  const categoryStreaks = useRef<Partial<Record<Category, number>>>({});
   const extraTimeMs = useRef(0);
   const roundStart = useRef(0);
   const progress = useRef(new Animated.Value(1)).current;
@@ -199,6 +208,8 @@ export function GameScreen({ navigation, route }: Props) {
   useEffect(() => () => {
     stopSpeaking();
     stopCategoryAmbience();
+    stopTensionMusic();
+    stopMusicClip();
   }, []);
 
   const showReactions = params.mode === 'party' || Boolean(params.lobbyId);
@@ -560,6 +571,16 @@ export function GameScreen({ navigation, route }: Props) {
       if (correct) {
         matchStreak.current += 1;
         maxComboStreak.current = Math.max(maxComboStreak.current, matchStreak.current);
+        const catStreak = (categoryStreaks.current[q.category] ?? 0) + 1;
+        categoryStreaks.current[q.category] = catStreak;
+        const catBonus = calculateCategoryStreakBonus(q.category, catStreak);
+        if (catBonus) {
+          setComboFlash(catBonus.label);
+          setTimeout(() => setComboFlash(null), 1200);
+          if (profile) {
+            void update({ ...profile, coins: (profile.coins ?? 0) + catBonus.bonus });
+          }
+        }
         const label = comboLabel(matchStreak.current);
         if (label) {
           setComboFlash(label);
@@ -592,6 +613,7 @@ export function GameScreen({ navigation, route }: Props) {
         }
       } else {
         matchStreak.current = 0;
+        categoryStreaks.current[q.category] = 0;
         if (isEndless) {
           endlessWrong.current += 1;
           if (endlessWrong.current >= 3) {
@@ -648,13 +670,25 @@ export function GameScreen({ navigation, route }: Props) {
       setLocked(true);
       setSelected(i);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      void playLockInSound();
       const revealTimer = setTimeout(() => {
         setRevealAnswers(true);
+        const isCorrect = i === questions[index]?.answer;
         void Haptics.notificationAsync(
-          i === questions[index]?.answer
+          isCorrect
             ? Haptics.NotificationFeedbackType.Success
             : Haptics.NotificationFeedbackType.Error
         );
+        if (isCorrect) {
+          void playCorrectSound();
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 1500);
+        } else {
+          void playWrongSound();
+          setScreenShake(true);
+          setTimeout(() => setScreenShake(false), 400);
+        }
+        stopTensionMusic();
         const advanceTimer = setTimeout(() => recordAndAdvance(i), 900);
         timers.current.push(advanceTimer);
       }, 650);
@@ -668,6 +702,24 @@ export function GameScreen({ navigation, route }: Props) {
     setLiveStats((s) => (s.length ? startRound(s) : s));
     roundStart.current = Date.now();
     progress.setValue(1);
+    setTimerUrgent(false);
+
+    // Start tension music in last 3 seconds
+    const tensionTimer = setTimeout(() => {
+      setTimerUrgent(true);
+      void startTensionMusic();
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, ROUND_TIME_MS + extraTimeMs.current - 3000);
+    timers.current.push(tensionTimer);
+
+    // Tick sound every second in last 5 seconds
+    for (let t = 1; t <= 5; t++) {
+      const tickTimer = setTimeout(() => {
+        if (!locked) void playTickSound();
+      }, ROUND_TIME_MS + extraTimeMs.current - t * 1000);
+      timers.current.push(tickTimer);
+    }
+
     Animated.timing(progress, {
       toValue: 0,
       duration: ROUND_TIME_MS + extraTimeMs.current,
@@ -786,13 +838,16 @@ export function GameScreen({ navigation, route }: Props) {
   };
 
   return (
+    <ScreenShake shake={screenShake} style={{ flex: 1 }}>
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <Confetti count={35} active={showConfetti} />
       <MatchCelebrationOverlay payload={celebration} onDone={() => setCelebration(null)} />
       <FloatingReactions reactions={reactions} />
 
       <View style={styles.timerTrack}>
-        <Animated.View style={[styles.timerFill, { width: widthInterpolate, backgroundColor: catTheme.fill }]} />
+        <Animated.View style={[styles.timerFill, { width: widthInterpolate, backgroundColor: timerUrgent ? colors.danger : catTheme.fill }]} />
       </View>
+      {timerUrgent && <Text style={styles.urgentText}>⏱ Time almost up!</Text>}
       {isTimed && (
         <Text style={styles.timedLabel}>⏱ {Math.ceil(timedLeftMs / 1000)}s left</Text>
       )}
@@ -836,6 +891,7 @@ export function GameScreen({ navigation, route }: Props) {
               })
             }
           />
+          {q.audioUrl && <MusicAudioPlayer url={q.audioUrl} />}
         </View>
 
         {profile && (isSoloLike || params.mode === 'daily') && (
@@ -901,6 +957,7 @@ export function GameScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </ScreenShake>
   );
 }
 
@@ -1039,6 +1096,13 @@ function makeGameStyles(colors: ThemeColors) {
     color: colors.text,
     fontSize: font.body,
     fontWeight: '700',
+  },
+  urgentText: {
+    color: colors.danger,
+    fontSize: font.small,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 4,
   },
   });
 }

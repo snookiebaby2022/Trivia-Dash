@@ -58,6 +58,10 @@ export function OnboardingWalkthrough({ visible, isSignedIn, onDone }: Props) {
                 {step.feature === 'wedges' && '🎯 Category wheel on home'}
                 {step.feature === 'quick' && '⚡ Quick match on home'}
                 {step.feature === 'account' && '🔐 Account section in Settings'}
+                {step.feature === 'shop' && '🛒 Coin Shop on home'}
+                {step.feature === 'stats' && '📈 Stats dashboard on home'}
+                {step.feature === 'friends' && '👥 Friends & tournament on home'}
+                {step.feature === 'tournament' && '🏆 Tournament bracket on home'}
               </Text>
             </View>
           )}

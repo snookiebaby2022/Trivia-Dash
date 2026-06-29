@@ -165,8 +165,10 @@ export function dailyStatusLabel(profile: Profile): string {
   return 'Completed today';
 }
 
+export const MAX_STREAK_SHIELDS = 3;
+
 export function canUseStreakShieldAd(profile: Profile): boolean {
-  return profile.dailyStreak > 0 && !profile.streakShield && !profile.isPro;
+  return profile.dailyStreak > 0 && (profile.streakShieldCount ?? (profile.streakShield ? 1 : 0)) < MAX_STREAK_SHIELDS && !profile.isPro;
 }
 
 export function canUseDailyRetryAd(profile: Profile): boolean {
@@ -183,7 +185,16 @@ export function applyDailyExtraPlay(profile: Profile): Partial<Profile> {
 }
 
 export function applyStreakShield(profile: Profile): Partial<Profile> {
-  return { streakShield: true };
+  const count = profile.streakShieldCount ?? (profile.streakShield ? 1 : 0);
+  if (count >= MAX_STREAK_SHIELDS) return {};
+  return { streakShield: true, streakShieldCount: count + 1 };
+}
+
+export function consumeStreakShield(profile: Profile): Partial<Profile> {
+  const count = profile.streakShieldCount ?? (profile.streakShield ? 1 : 0);
+  if (count <= 0) return {};
+  const next = count - 1;
+  return { streakShield: next > 0, streakShieldCount: next };
 }
 
 export function consumeDailyExtraPlay(profile: Profile): Partial<Profile> {
