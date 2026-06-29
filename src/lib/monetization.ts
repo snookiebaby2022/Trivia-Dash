@@ -19,15 +19,26 @@ export const PRO_ANNUAL_ID = RC_PRODUCT_YEARLY;
 export const PRO_PRICE_LABEL = '£3.49/mo';
 export const PRO_ANNUAL_LABEL = '£19.99/yr';
 
-export const ADMOB_BANNER_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/6300978111'
-  : 'ca-app-pub-XXXXXXXX/YYYYYYYY';
-export const ADMOB_INTERSTITIAL_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/1033173712'
-  : 'ca-app-pub-XXXXXXXX/IIIIIIII';
-export const ADMOB_REWARDED_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/5224354917'
-  : 'ca-app-pub-XXXXXXXX/ZZZZZZZZ';
+export const ADMOB_BANNER_ID = resolveAdMobId(
+  'ca-app-pub-3940256099942544/6300978111',
+  process.env.EXPO_PUBLIC_ADMOB_BANNER_ID
+);
+export const ADMOB_INTERSTITIAL_ID = resolveAdMobId(
+  'ca-app-pub-3940256099942544/1033173712',
+  process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID
+);
+export const ADMOB_REWARDED_ID = resolveAdMobId(
+  'ca-app-pub-3940256099942544/5224354917',
+  process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID
+);
+
+function resolveAdMobId(testId: string, envId?: string): string {
+  const trimmed = envId?.trim();
+  if (trimmed && !trimmed.includes('XXXX') && !trimmed.includes('YYYY')) {
+    return trimmed;
+  }
+  return __DEV__ ? testId : trimmed || testId;
+}
 
 /** Show interstitial every N completed matches (after first session). */
 export const INTERSTITIAL_EVERY_N_MATCHES = 5;
@@ -40,7 +51,7 @@ export const PRO_FRAMES: AvatarFrame[] = ['gold', 'silver', 'neon', 'star'];
 export const FREE_BADGES: AvatarBadge[] = ['none', 'star', 'fire'];
 export const PRO_BADGES: AvatarBadge[] = ['crown', 'bolt', 'gem', 'trophy', 'party'];
 
-export type RewardedPlacement = 'daily_retry' | 'streak_shield';
+export type RewardedPlacement = 'daily_retry' | 'streak_shield' | 'power_up_pack';
 
 export function proFeaturesLabel(): string {
   return 'Unlock everything — full archive · no ads · all voices · all cosmetics';

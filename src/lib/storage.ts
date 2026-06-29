@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { defaultPowerUpInventory } from './powerUps';
 import { normalizeAvatar, randomAvatar } from './avatars';
 import {
   clampVoicePreset,
@@ -31,6 +32,7 @@ export function newProfile(): Profile {
     avatar: randomAvatar(),
     voicePreset: 'host',
     voiceEnabled: false,
+    sfxEnabled: false,
     elo: 1000,
     wins: 0,
     losses: 0,
@@ -40,6 +42,9 @@ export function newProfile(): Profile {
     isPro: false,
     dailyStreak: 0,
     streakShield: false,
+    coins: 0,
+    loginStreak: 0,
+    powerUps: defaultPowerUpInventory(),
     achievementState: defaultAchievementState(),
     stats: defaultProfileStats(),
   };
@@ -73,10 +78,15 @@ function migrateProfile(raw: Partial<Profile>): Profile {
         : (raw.voicePreset ?? 'host'),
       isPro
     ),
-    voiceEnabled: false,
+    voiceEnabled: raw.voiceEnabled ?? false,
+    sfxEnabled: raw.sfxEnabled ?? false,
     isPro,
-    dailyStreak: raw.dailyStreak ?? 0,
     streakShield: raw.streakShield ?? false,
+    coins: raw.coins ?? 0,
+    loginStreak: raw.loginStreak ?? 0,
+    lastLoginDate: raw.lastLoginDate,
+    lastLoginRewardDate: raw.lastLoginRewardDate,
+    powerUps: { ...defaultPowerUpInventory(), ...raw.powerUps },
     dailyExtraPlayDate: raw.dailyExtraPlayDate,
     achievementState: raw.achievementState ?? defaultAchievementState(),
     stats: {
@@ -84,7 +94,9 @@ function migrateProfile(raw: Partial<Profile>): Profile {
       ...raw.stats,
       categoryPlays: raw.stats?.categoryPlays ?? {},
       dailyBests: raw.stats?.dailyBests ?? {},
+      bestMatchScore: raw.stats?.bestMatchScore ?? 0,
       seasonXp: raw.stats?.seasonXp ?? 0,
+      recentQuestionIds: raw.stats?.recentQuestionIds ?? [],
     },
   };
 }

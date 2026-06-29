@@ -1,5 +1,6 @@
 import * as Speech from 'expo-speech';
 
+import { initAudio } from './audio';
 import {
   getVoicePack,
   isPremiumVoicePack,
@@ -78,7 +79,7 @@ export function formatResultVoiceLine(text: string, _preset: VoicePreset): strin
 }
 
 export function stopSpeaking(): void {
-  if (!speaking) return;
+  lastSpokenKey = '';
   Speech.stop();
   speaking = false;
 }
@@ -91,26 +92,27 @@ function speakOnceDevice(
   gender: 'male' | 'female' | 'any'
 ): Promise<void> {
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      speaking = false;
+      resolve();
+    };
+
     void pickDeviceVoice(packId, gender).then((voice) => {
       speaking = true;
       Speech.speak(text, {
         pitch,
         rate,
         language: 'en-US',
-        voice,
-        onDone: () => {
-          speaking = false;
-          resolve();
-        },
-        onStopped: () => {
-          speaking = false;
-          resolve();
-        },
-        onError: () => {
-          speaking = false;
-          resolve();
-        },
+        ...(voice ? { voice } : {}),
+        onDone: finish,
+        onStopped: finish,
+        onError: finish,
       });
+      // Some Android devices never fire onDone — don't block the next question.
+      setTimeout(finish, Math.max(8000, text.length * 80));
     });
   });
 }
@@ -120,6 +122,7 @@ export async function speakQuestion(
   settings: VoiceSettings = DEFAULT_VOICE
 ): Promise<void> {
   if (!settings.enabled) return;
+  if (!text.trim()) return;
 
   const pack = getVoicePack(settings.preset);
   const key = `${settings.preset}:${text}`;
@@ -127,7 +130,8 @@ export async function speakQuestion(
   lastSpokenKey = key;
 
   stopSpeaking();
-  await wait(30);
+  await initAudio();
+  await wait(50);
   await speakOnceDevice(text, pack.id, 1, QUESTION_SPEECH_RATE, pack.gender);
 }
 
@@ -137,6 +141,7 @@ export async function speakLine(
   pitchOffset = 0
 ): Promise<void> {
   if (!settings.enabled) return;
+  await initAudio();
   const pack = getVoicePack(settings.preset);
   const line = formatResultVoiceLine(text, settings.preset);
   const voice = await pickDeviceVoice(pack.id, pack.gender);
@@ -144,7 +149,7 @@ export async function speakLine(
     pitch: 1 + pitchOffset,
     rate: QUESTION_SPEECH_RATE,
     language: 'en-US',
-    voice,
+    ...(voice ? { voice } : {}),
   });
 }
 

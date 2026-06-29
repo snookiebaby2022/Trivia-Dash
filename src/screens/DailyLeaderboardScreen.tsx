@@ -5,6 +5,7 @@ import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, Text, Vie
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AvatarView } from '../components/AvatarView';
+import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { useProfile } from '../context/ProfileContext';
 import { todayKey } from '../lib/daily';
 import { fetchDailyLeaderboard } from '../lib/dailyLeaderboard';
@@ -46,6 +47,7 @@ export function DailyLeaderboardScreen({}: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <Text style={styles.banner}>Same 10 questions for everyone · {todayKey()}</Text>
+      <PlayGamesPanel />
       {yourScore != null && (
         <Pressable
           style={styles.you}

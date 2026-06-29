@@ -6,7 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useProfile } from '../context/ProfileContext';
+import { addCoins } from '../lib/coins';
 import {
+  claimSeasonReward,
   ensureSeasonPass,
   seasonLevel,
   seasonTiers,
@@ -25,12 +27,18 @@ export function SeasonPassScreen({}: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const { profile, showProPaywall } = useProfile();
+  const { profile, showProPaywall, update } = useProfile();
   if (!profile) return null;
 
   const pass = ensureSeasonPass(profile.seasonPass);
   const level = seasonLevel(pass.xp);
   const prog = seasonXpProgress(pass.xp);
+
+  const claim = (tierLevel: number, track: 'free' | 'pro') => {
+    const result = claimSeasonReward(pass, tierLevel, track, profile.isPro);
+    if (!result) return;
+    void update(addCoins({ ...profile, seasonPass: result.pass }, result.coins));
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -46,19 +54,37 @@ export function SeasonPassScreen({}: Props) {
 
         {seasonTiers().map((tier) => {
           const unlocked = pass.xp >= tier.xpRequired;
+          const freeClaimed = pass.claimedFree.includes(tier.level);
+          const proClaimed = pass.claimedPro.includes(tier.level);
+          const canClaimFree = unlocked && tier.freeReward && !freeClaimed;
+          const canClaimPro = unlocked && profile.isPro && tier.proReward && !proClaimed;
           return (
             <View key={tier.level} style={[styles.tier, unlocked && styles.tierOn]}>
               <Text style={styles.lvl}>Lv {tier.level}</Text>
               <View style={styles.rewards}>
-                <Text style={styles.free}>Free: {tier.freeReward ?? '—'}</Text>
+                <View style={styles.rewardRow}>
+                  <Text style={styles.free}>Free: {tier.freeReward ?? '—'}</Text>
+                  {canClaimFree && (
+                    <Pressable onPress={() => claim(tier.level, 'free')} style={styles.claimBtn}>
+                      <Text style={styles.claimText}>Claim</Text>
+                    </Pressable>
+                  )}
+                  {freeClaimed && tier.freeReward && <Text style={styles.claimed}>✓</Text>}
+                </View>
                 <Pressable
                   onPress={() => !profile.isPro && void showProPaywall()}
-                  style={styles.proRow}
+                  style={styles.rewardRow}
                 >
                   <Text style={styles.pro}>
                     Pro: {tier.proReward ?? '—'}
                     {!profile.isPro ? ' 🔒' : ''}
                   </Text>
+                  {canClaimPro && (
+                    <Pressable onPress={() => claim(tier.level, 'pro')} style={styles.claimBtn}>
+                      <Text style={styles.claimText}>Claim</Text>
+                    </Pressable>
+                  )}
+                  {proClaimed && tier.proReward && <Text style={styles.claimed}>✓</Text>}
                 </Pressable>
               </View>
             </View>
@@ -96,8 +122,17 @@ function makeStyles(colors: ThemeColors) {
   tierOn: { borderColor: colors.primary },
   lvl: { color: colors.text, fontWeight: '900', marginBottom: 4 },
   rewards: { gap: 4 },
-  free: { color: colors.textMuted, fontSize: font.small },
+  rewardRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  free: { color: colors.textMuted, fontSize: font.small, flex: 1 },
   proRow: {},
-  pro: { color: colors.gold, fontSize: font.small, fontWeight: '700' },
+  pro: { color: colors.gold, fontSize: font.small, fontWeight: '700', flex: 1 },
+  claimBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+  },
+  claimText: { color: '#fff', fontSize: font.small, fontWeight: '800' },
+  claimed: { color: colors.success, fontWeight: '900' },
   });
 }

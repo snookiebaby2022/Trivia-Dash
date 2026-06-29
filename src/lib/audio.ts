@@ -1,9 +1,10 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
+import { isSfxEnabled } from './gameAudio';
+
 const SOUNDS = {
   victory: require('../../assets/sounds/victory.mp3'),
-  /** Short soft bell — used after question voiceover ends. */
-  chime: require('../../assets/sounds/victory.mp3'),
+  milestone: require('../../assets/sounds/milestone.mp3'),
 } as const;
 
 let audioReady = false;
@@ -12,12 +13,18 @@ let sfxBusy = false;
 async function ensureAudioMode(): Promise<void> {
   if (audioReady) return;
   await setAudioModeAsync({
-    playsInSilentMode: true,
+    playsInSilentMode: isSfxEnabled(),
     interruptionMode: 'duckOthers',
     allowsRecording: false,
     shouldPlayInBackground: false,
   });
   audioReady = true;
+}
+
+/** Re-apply audio mode when user toggles sound in settings. */
+export async function refreshAudioMode(): Promise<void> {
+  audioReady = false;
+  await ensureAudioMode();
 }
 
 export async function initAudio(): Promise<void> {
@@ -29,6 +36,7 @@ export async function initAudio(): Promise<void> {
 }
 
 function playOneShot(source: number, volume: number, onFinish?: () => void): void {
+  if (!isSfxEnabled()) return;
   if (sfxBusy) return;
   sfxBusy = true;
 
@@ -54,14 +62,20 @@ function playOneShot(source: number, volume: number, onFinish?: () => void): voi
 }
 
 export async function playVictoryStinger(): Promise<void> {
-  playOneShot(SOUNDS.victory, 0.5);
+  playOneShot(SOUNDS.victory, 0.45);
 }
 
-/** Pleasant "your turn" chime after the host reads the question. */
-export async function playQuestionChime(): Promise<void> {
-  playOneShot(SOUNDS.chime, 0.18);
+export async function playMilestoneStinger(): Promise<void> {
+  playOneShot(SOUNDS.milestone, 0.35);
 }
+
+/** @deprecated Post-question chime removed — was playing victory.mp3 and annoyed players. */
+export async function playQuestionChime(): Promise<void> {}
 
 export async function playCelebration(_hasMilestone: boolean): Promise<void> {
-  await playVictoryStinger();
+  if (_hasMilestone) {
+    await playMilestoneStinger();
+  } else {
+    await playVictoryStinger();
+  }
 }

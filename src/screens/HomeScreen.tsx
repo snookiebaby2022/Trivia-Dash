@@ -14,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AdBanner } from '../components/AdBanner';
 import { AuthPanel } from '../components/AuthPanel';
+import { DailyStreakModal } from '../components/DailyStreakModal';
 import { OnboardingWalkthrough } from '../components/OnboardingWalkthrough';
 import { LegalLinks } from '../components/LegalLinks';
 import { AvatarCustomizer } from '../components/AvatarCustomizer';
 import { ProfileBanner } from '../components/ProfileBanner';
 import { CategoryWheel } from '../components/CategoryWheel';
+import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ProUpgradeCard } from '../components/ProUpgradeCard';
 import { RewardedOfferCard } from '../components/RewardedOfferCard';
@@ -26,6 +28,7 @@ import { VoicePicker } from '../components/VoicePicker';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 import { APP_NAME_UPPER, APP_TAGLINE, APP_WELCOME_LINE } from '../lib/brand';
+import { formatCoins } from '../lib/coins';
 import { getDailyChallenge, todayKey } from '../lib/daily';
 import { rankTitle } from '../lib/elo';
 import {
@@ -41,8 +44,10 @@ import { dismissDailyReminder, shouldShowDailyReminder } from '../lib/reminders'
 import { hasCompletedWalkthrough } from '../lib/onboarding';
 import { getWeeklyEvent } from '../lib/weeklyEvent';
 import { speakQuestion } from '../lib/speech';
+import { getLoginStreakState } from '../lib/streakRewards';
+import { refreshTriviaCache } from '../lib/triviaApi';
 import { countEarnedWedges, WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
-import { FREE_QUESTIONS, PRO_HISTORICAL_QUESTIONS } from '../data/questions';
+import { FREE_QUESTIONS, PRO_HISTORICAL_QUESTIONS, setBonusQuestions } from '../data/questions';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -64,13 +69,15 @@ export function HomeScreen({ navigation }: Props) {
     manageSubscription,
     update,
     showProPaywall,
+    claimLoginReward,
   } = useProfile();
   const [editing, setEditing] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
+  const [showLoginStreak, setShowLoginStreak] = useState(false);
   const [draft, setDraft] = useState('');
   const [showCustomize, setShowCustomize] = useState(false);
   const [showPro, setShowPro] = useState(false);
-  const [rewardLoading, setRewardLoading] = useState<'daily' | 'shield' | null>(null);
+  const [rewardLoading, setRewardLoading] = useState<'daily' | 'shield' | 'powerups' | null>(null);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const styles = useMemo(() => makeHomeStyles(colors), [colors]);
 
@@ -79,6 +86,11 @@ export function HomeScreen({ navigation }: Props) {
       if (!profile || loading) return;
       void hasCompletedWalkthrough().then((done) => {
         if (!done) setShowWalkthrough(true);
+      });
+      const login = getLoginStreakState(profile);
+      if (login.canClaim) setShowLoginStreak(true);
+      void refreshTriviaCache().then((qs) => {
+        if (qs.length) setBonusQuestions(qs);
       });
     }, [profile, loading])
   );
@@ -110,6 +122,8 @@ export function HomeScreen({ navigation }: Props) {
   const dailyLabel = dailyStatusLabel(profile);
   const wedgesEarned = countEarnedWedges(profile);
   const weekly = getWeeklyEvent();
+  const loginStreak = getLoginStreakState(profile);
+  const coins = profile.coins ?? 0;
 
   const startDaily = async () => {
     if (!dailyReady) return;
@@ -130,6 +144,15 @@ export function HomeScreen({ navigation }: Props) {
         isSignedIn={isSignedIn}
         onDone={() => setShowWalkthrough(false)}
       />
+      <DailyStreakModal
+        visible={showLoginStreak}
+        state={loginStreak}
+        onClaim={async () => {
+          await claimLoginReward();
+          setShowLoginStreak(false);
+        }}
+        onClose={() => setShowLoginStreak(false)}
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Pressable
@@ -140,7 +163,13 @@ export function HomeScreen({ navigation }: Props) {
             <Text style={styles.settingsIcon}>⚙</Text>
           </Pressable>
           <Text style={[styles.brand, { color: colors.gold, textShadowColor: colors.primary }]}>{APP_NAME_UPPER}</Text>
-          <View style={styles.settingsSpacer} />
+          <Pressable
+            style={[styles.coinsBtn, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}
+            onPress={() => setShowLoginStreak(true)}
+            accessibilityLabel="Coins and daily streak"
+          >
+            <Text style={styles.coinsText}>🪙 {formatCoins(coins)}</Text>
+          </Pressable>
         </View>
         <Text style={styles.tagline}>{APP_TAGLINE}</Text>
 
@@ -251,7 +280,21 @@ export function HomeScreen({ navigation }: Props) {
             variant="primary"
             onPress={() => navigation.navigate('Game', { mode: 'solo' })}
           />
-          <Text style={styles.heroSub}>Single-player dash — no opponent wait</Text>
+          <Text style={styles.heroSub}>Single-player dash — combo multipliers & power-ups</Text>
+
+          <PrimaryButton
+            label="♾️  ENDLESS DASH"
+            variant="ghost"
+            onPress={() => navigation.navigate('Game', { mode: 'endless' })}
+          />
+          <Text style={styles.heroSub}>3 strikes · keep going until you miss three</Text>
+
+          <PrimaryButton
+            label="⏱  TIMED CHALLENGE · 90s"
+            variant="ghost"
+            onPress={() => navigation.navigate('Game', { mode: 'timed' })}
+          />
+          <Text style={styles.heroSub}>Race the clock — max score in 90 seconds</Text>
 
           <PrimaryButton
             label={`📅  DAILY CHALLENGE · ${dailyLabel}`}
@@ -279,6 +322,8 @@ export function HomeScreen({ navigation }: Props) {
           <Stat label="Streak" value={String(profile.streak)} color={colors.accent} styles={styles} />
           <Stat label="Correct" value={String(profile.stats.totalCorrect)} color={colors.gold} styles={styles} />
         </View>
+
+        <PlayGamesPanel />
 
         {profile.streakShield && (
           <Text style={styles.shieldHint}>🛡 Streak shield active</Text>
@@ -309,7 +354,7 @@ export function HomeScreen({ navigation }: Props) {
           <ModeTile
             emoji="🏅"
             title="ELO board"
-            sub="Global ranks"
+            sub="Global top 100"
             onPress={() => navigation.navigate('Leaderboard')}
             styles={styles}
           />
@@ -368,6 +413,17 @@ export function HomeScreen({ navigation }: Props) {
             }}
           />
         )}
+
+        <RewardedOfferCard
+          title="Power-up pack"
+          subtitle="Watch an ad for 50/50, +5s, and skip"
+          loading={rewardLoading === 'powerups'}
+          onWatch={async () => {
+            setRewardLoading('powerups');
+            await watchRewardedAd('power_up_pack');
+            setRewardLoading(null);
+          }}
+        />
 
         <AdBanner />
 
@@ -477,8 +533,19 @@ function makeHomeStyles(colors: ThemeColors) {
   settingsIcon: {
     fontSize: 20,
   },
-  settingsSpacer: {
-    width: 40,
+  coinsBtn: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  coinsText: {
+    color: colors.gold,
+    fontSize: font.small,
+    fontWeight: '900',
   },
   brand: {
     fontSize: 32,

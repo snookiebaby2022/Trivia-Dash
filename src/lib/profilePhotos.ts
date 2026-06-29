@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 import { isSupabaseConfigured, supabase } from './supabase';
 
@@ -91,7 +91,7 @@ export async function persistProfileImage(
   }
 
   await FileSystem.copyAsync({ from: sourceUri, to: dest });
-  const localUri = dest;
+  const localUri = `${dest}?v=${Date.now()}`;
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -158,9 +158,22 @@ export async function pickAndPersistProfileImage(
   userId: string,
   kind: ProfileImageKind
 ): Promise<string | null> {
-  const picked = await promptPickProfileImage(kind);
-  if (!picked) return null;
-  return persistProfileImage(userId, kind, picked);
+  if (Platform.OS === 'web') {
+    Alert.alert(
+      'Photos',
+      'Profile and cover photos can be changed in the Android app. Web preview does not support the photo picker.'
+    );
+    return null;
+  }
+  try {
+    const picked = await promptPickProfileImage(kind);
+    if (!picked) return null;
+    return await persistProfileImage(userId, kind, picked);
+  } catch (e) {
+    console.warn('[profilePhotos] pick failed', e);
+    Alert.alert('Could not save photo', 'Try another image or check photo permissions in Android Settings.');
+    return null;
+  }
 }
 
 /** Default cover gradient when user has no cover photo. */

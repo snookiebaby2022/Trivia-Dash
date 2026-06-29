@@ -8,6 +8,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { ProUpgradeCard } from '../components/ProUpgradeCard';
 import { useProfile } from '../context/ProfileContext';
 import { PRO_ANNUAL_LABEL, PRO_PRICE_LABEL } from '../lib/monetization';
+import { purchaseMonthly, purchaseYearly } from '../lib/purchases';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -15,8 +16,8 @@ import { font, radius, spacing } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'UnlockFeatures'>;
 
 const FREE_ITEMS = [
-  'Quick Match solo & Daily challenge',
-  'Daily leaderboard (same 10 Qs for all)',
+  'Daily challenge + login streak coins',
+  'Global top 100 · high score & ELO',
   'Category practice — 3 runs/day',
   'Wedge profile & 18 categories',
   'Weekly themed events',
@@ -45,7 +46,7 @@ export function UnlockFeaturesScreen({}: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const { profile, showProPaywall } = useProfile();
+  const { profile } = useProfile();
   const [showPro, setShowPro] = React.useState(false);
 
   return (
@@ -75,9 +76,33 @@ export function UnlockFeaturesScreen({}: Props) {
             {showPro ? (
               <ProUpgradeCard onClose={() => setShowPro(false)} />
             ) : (
-              <PrimaryButton label="Unlock everything" onPress={() => setShowPro(true)} />
+              <>
+                <View style={styles.planRow}>
+                  <View style={styles.planOption}>
+                    <Text style={styles.planLabel}>Monthly</Text>
+                    <Text style={styles.planPrice}>{PRO_PRICE_LABEL}</Text>
+                    <PrimaryButton
+                      label="Subscribe Monthly"
+                      onPress={() => void purchaseMonthly()}
+                    />
+                  </View>
+                  <View style={styles.planOption}>
+                    <Text style={styles.planLabel}>Yearly</Text>
+                    <Text style={styles.planPrice}>{PRO_ANNUAL_LABEL}</Text>
+                    <PrimaryButton
+                      label="Subscribe Yearly"
+                      variant="accent"
+                      onPress={() => void purchaseYearly()}
+                    />
+                  </View>
+                </View>
+                <PrimaryButton
+                  label="View all plans"
+                  variant="ghost"
+                  onPress={() => setShowPro(true)}
+                />
+              </>
             )}
-            <PrimaryButton label="View plans" variant="ghost" onPress={() => void showProPaywall()} />
           </>
         )}
       </ScrollView>
@@ -103,5 +128,29 @@ function makeStyles(colors: ThemeColors) {
   colTitle: { color: colors.text, fontWeight: '900', marginBottom: 4 },
   item: { color: colors.textMuted, fontSize: font.small },
   itemPro: { color: colors.gold, fontSize: font.small, fontWeight: '600' },
+  planRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  planOption: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  planLabel: {
+    color: colors.text,
+    fontSize: font.h3,
+    fontWeight: '900',
+  },
+  planPrice: {
+    color: colors.gold,
+    fontSize: font.body,
+    fontWeight: '700',
+  },
   });
 }

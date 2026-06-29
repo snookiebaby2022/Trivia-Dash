@@ -17,7 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
   const { colors, scheme, preference, setPreference, toggleScheme } = useTheme();
-  const { profile, setVoiceEnabled, setProfilePhoto, setCoverPhoto, removeProfilePhoto, removeCoverPhoto } = useProfile();
+  const { profile, setVoiceEnabled, setSfxEnabled, setProfilePhoto, setCoverPhoto, removeProfilePhoto, removeCoverPhoto } = useProfile();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const themeOptions: { id: ColorScheme | 'system'; label: string }[] = [
@@ -86,11 +86,24 @@ export function SettingsScreen({ navigation }: Props) {
           <Row
             colors={colors}
             label="Host voiceover"
-            hint="Read questions aloud during matches"
+            hint="Hear the host read questions and countdown"
             right={
               <Switch
                 value={profile?.voiceEnabled ?? false}
                 onValueChange={(v) => void setVoiceEnabled(v)}
+                trackColor={{ false: colors.cardBorder, true: colors.primary }}
+                thumbColor={colors.text}
+              />
+            }
+          />
+          <Row
+            colors={colors}
+            label="Sound effects"
+            hint="Music in Entertainment/Music rounds, celebration sounds"
+            right={
+              <Switch
+                value={profile?.sfxEnabled ?? false}
+                onValueChange={(v) => void setSfxEnabled(v)}
                 trackColor={{ false: colors.cardBorder, true: colors.primary }}
                 thumbColor={colors.text}
               />

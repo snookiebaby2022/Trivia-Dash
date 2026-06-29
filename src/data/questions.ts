@@ -1,5 +1,7 @@
 import type { Category, Question } from '../types';
+import { filterValidQuestions } from '../lib/questionQuality';
 import { EXTRA_FREE_QUESTIONS } from './extraQuestions';
+import { MEDIA_QUESTIONS } from './mediaQuestions';
 import { PICTURE_QUESTIONS } from './pictureQuestions';
 import { PRO_HISTORICAL_QUESTIONS, PRO_YEAR_MAX, PRO_YEAR_MIN } from './proQuestions';
 
@@ -53,6 +55,17 @@ export const FREE_QUESTIONS: Question[] = FREE_RAW.map((q) => ({ ...q, tier: 'fr
 export const QUESTIONS_PER_MATCH = 7;
 export const DAILY_QUESTIONS_COUNT = 10;
 
+let bonusQuestions: Question[] = [];
+
+/** Merge OpenTDB (or other API) questions into the match pool. */
+export function setBonusQuestions(questions: Question[]) {
+  bonusQuestions = filterValidQuestions(questions);
+}
+
+export function getBonusQuestionCount(): number {
+  return bonusQuestions.length;
+}
+
 export interface PickQuestionsOptions {
   isPro?: boolean;
   yearMin?: number;
@@ -60,10 +73,12 @@ export interface PickQuestionsOptions {
   questionIds?: string[];
   category?: Category;
   includePictures?: boolean;
+  /** Skip these ids when the pool is large enough (reduces repeats). */
+  recentIds?: string[];
 }
 
 export function getQuestionPool(isPro: boolean, includePictures = false): Question[] {
-  const base = [...FREE_QUESTIONS, ...EXTRA_FREE_QUESTIONS];
+  const base = [...FREE_QUESTIONS, ...EXTRA_FREE_QUESTIONS, ...MEDIA_QUESTIONS, ...bonusQuestions];
   if (isPro) {
     const pool = [...base, ...PRO_HISTORICAL_QUESTIONS];
     return includePictures ? [...pool, ...PICTURE_QUESTIONS] : pool;
@@ -87,9 +102,10 @@ export function pickMatchQuestions(
     questionIds,
     category,
     includePictures = false,
+    recentIds = [],
   } = options;
 
-  let pool = getQuestionPool(isPro, includePictures);
+  let pool = filterValidQuestions(getQuestionPool(isPro, includePictures));
   if (category) pool = pool.filter((q) => q.category === category);
 
   if (questionIds?.length) {
@@ -104,13 +120,27 @@ export function pickMatchQuestions(
     });
   }
 
+  if (!questionIds?.length && recentIds.length > 0) {
+    const fresh = pool.filter((q) => !recentIds.includes(q.id));
+    if (fresh.length >= count) pool = fresh;
+  }
+
   const random = seedRandom(seed ?? Math.floor(Math.random() * 1e9));
   const shuffled = [...pool];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled.slice(0, Math.min(count, shuffled.length));
+
+  const random2 = seedRandom(Math.floor(random() * 1e9) ^ (seed ?? 0));
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random2() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const offset = shuffled.length > count ? Math.floor(random() * shuffled.length) : 0;
+  const rotated = [...shuffled.slice(offset), ...shuffled.slice(0, offset)];
+  return rotated.slice(0, Math.min(count, rotated.length));
 }
 
 export function seedRandom(seed: number): () => number {

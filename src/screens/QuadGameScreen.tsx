@@ -41,7 +41,9 @@ import {
   subscribePartyReactions,
   type ReactionEmoji,
 } from '../lib/reactions';
-import { speakQuestion, stopSpeaking } from '../lib/speech';
+import { speakQuestion, speakLine, stopSpeaking } from '../lib/speech';
+import { countdownVoiceLine } from '../lib/gameShow';
+import { getRecentQuestionIds } from '../lib/questionHistory';
 import { isHarveyStylePack } from '../lib/voiceCatalog';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
@@ -82,8 +84,9 @@ export function QuadGameScreen({ navigation, route }: Props) {
     () =>
       pickMatchQuestions(QUAD_QUESTIONS, questionSeed, {
         isPro: profile?.isPro ?? false,
+        recentIds: getRecentQuestionIds(profile?.stats),
       }),
-    [questionSeed, profile?.isPro]
+    [questionSeed, profile?.isPro, profile?.stats]
   );
 
   const rounds = useRef<RoundResult[]>([]);
@@ -143,6 +146,14 @@ export function QuadGameScreen({ navigation, route }: Props) {
       channel?.unsubscribe();
     };
   }, [lobbyId, profile]);
+
+  useEffect(() => {
+    if (phase !== 'countdown' || !profile?.voiceEnabled) return;
+    void speakLine(countdownVoiceLine(countdown), {
+      preset: profile.voicePreset,
+      enabled: true,
+    });
+  }, [phase, countdown, profile?.voiceEnabled, profile?.voicePreset]);
 
   useEffect(() => {
     if (phase !== 'countdown') return;

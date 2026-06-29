@@ -1,4 +1,4 @@
-# Local Play release AAB - runs prebuild (Play Games SDK) then Gradle bundleRelease
+# Local release APK - runs prebuild (Play Games SDK) then Gradle assembleRelease
 # Requires: JDK 17+, Android SDK, upload keystore in android/
 
 $ErrorActionPreference = "Stop"
@@ -74,20 +74,20 @@ Write-Host "Running expo prebuild (android)..."
 npx expo prebuild --platform android --no-install
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Building release AAB ($versionName / versionCode $versionCode)..."
+Write-Host "Building release APK ($versionName / versionCode $versionCode)..."
 Push-Location android
 try {
-    & .\gradlew.bat bundleRelease --no-daemon
+    & .\gradlew.bat assembleRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Pop-Location
 }
 
-$Src = Join-Path $PWD "android\app\build\outputs\bundle\release\app-release.aab"
-$Dst = Join-Path $PWD "TriviaDash-$versionName-v$versionCode.aab"
+$Src = Join-Path $PWD "android\app\build\outputs\apk\release\app-release.apk"
+$Dst = Join-Path $PWD "TriviaDash-$versionName-v$versionCode.apk"
 Copy-Item $Src $Dst -Force
 $Size = (Get-Item $Dst).Length
 Write-Host ""
 Write-Host "Done: $Dst ($([math]::Round($Size/1MB, 1)) MB)" -ForegroundColor Green
-Write-Host "Upload to Play Console - Testing - Create release"
+Write-Host "Install: adb install -r `"$Dst`""

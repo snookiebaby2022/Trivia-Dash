@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -13,20 +14,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useProfile } from '../context/ProfileContext';
 import { AvatarView } from '../components/AvatarView';
+import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { isSupabaseConfigured } from '../lib/supabase';
-import { fetchLeaderboard } from '../lib/leaderboard';
+import { fetchLeaderboard, fetchScoreLeaderboard } from '../lib/leaderboard';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
 import type { LeaderboardEntry } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Leaderboard'>;
+type BoardMode = 'elo' | 'score';
 
 function AnimatedRow({
   item,
   index,
   isYou,
   medal,
+  mode,
   styles,
   colors,
 }: {
@@ -34,12 +38,14 @@ function AnimatedRow({
   index: number;
   isYou: boolean;
   medal: string | null;
+  mode: BoardMode;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
 }) {
   const slide = useRef(new Animated.Value(40)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(1)).current;
+  const primary = mode === 'score' ? (item.bestMatchScore ?? 0) : item.elo;
 
   useEffect(() => {
     Animated.parallel([
@@ -90,8 +96,8 @@ function AnimatedRow({
         {item.rank === 1 && <Text style={styles.crown}>👑 Champion</Text>}
       </View>
       <View style={styles.rightCol}>
-        <Text style={styles.elo}>{item.elo}</Text>
-        <Text style={styles.wins}>{item.wins}W</Text>
+        <Text style={styles.elo}>{primary}</Text>
+        <Text style={styles.wins}>{mode === 'score' ? 'best run' : `${item.wins}W`}</Text>
       </View>
     </Animated.View>
   );
@@ -102,23 +108,28 @@ export function LeaderboardScreen(_props: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const { profile } = useProfile();
+  const [mode, setMode] = useState<BoardMode>('score');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [live, setLive] = useState(false);
   const headerGlow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!profile) return;
     let mounted = true;
-    fetchLeaderboard(profile).then((rows) => {
+    setLoading(true);
+    const load = mode === 'score' ? fetchScoreLeaderboard(profile) : fetchLeaderboard(profile);
+    void load.then((rows) => {
       if (mounted) {
         setEntries(rows);
+        setLive(isSupabaseConfigured && !rows[0]?.id.startsWith('mock_'));
         setLoading(false);
       }
     });
     return () => {
       mounted = false;
     };
-  }, [profile]);
+  }, [profile, mode]);
 
   useEffect(() => {
     Animated.loop(
@@ -148,14 +159,33 @@ export function LeaderboardScreen(_props: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <Animated.View style={[styles.hero, { borderColor: glowBorder }]}>
-        <Text style={styles.heroTitle}>🏅 Leaderboard</Text>
-        <Text style={styles.heroSub}>Climb the ranks · chase the crown</Text>
+        <Text style={styles.heroTitle}>🏅 Global Top 100</Text>
+        <Text style={styles.heroSub}>
+          {live ? 'Live online rankings' : 'Demo data · sign in & play to appear when online'}
+        </Text>
       </Animated.View>
 
-      {!isSupabaseConfigured && (
+      <View style={styles.tabs}>
+        <Pressable
+          style={[styles.tab, mode === 'score' && styles.tabOn]}
+          onPress={() => setMode('score')}
+        >
+          <Text style={[styles.tabText, mode === 'score' && styles.tabTextOn]}>High score</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, mode === 'elo' && styles.tabOn]}
+          onPress={() => setMode('elo')}
+        >
+          <Text style={[styles.tabText, mode === 'elo' && styles.tabTextOn]}>ELO rating</Text>
+        </Pressable>
+      </View>
+
+      <PlayGamesPanel />
+
+      {!live && (
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
-            Demo board · add Supabase keys in .env for live global rankings
+            Play a match while online to submit your score · Supabase syncs top 100 globally
           </Text>
         </View>
       )}
@@ -163,12 +193,20 @@ export function LeaderboardScreen(_props: Props) {
         data={entries}
         keyExtractor={(e) => e.id}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          profile ? (
+            <Text style={styles.youHint}>
+              Your best: {profile.stats.bestMatchScore ?? 0} pts · ELO {profile.elo}
+            </Text>
+          ) : null
+        }
         renderItem={({ item, index }) => (
           <AnimatedRow
             item={item}
             index={index}
             isYou={item.id === profile?.id}
             medal={medal(item.rank)}
+            mode={mode}
             styles={styles}
             colors={colors}
           />
@@ -209,6 +247,34 @@ function makeStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontSize: font.small,
     marginTop: 4,
+    textAlign: 'center',
+  },
+  tabs: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+  },
+  tabOn: {
+    borderColor: colors.primary,
+    backgroundColor: colors.bgElevated,
+  },
+  tabText: {
+    color: colors.textMuted,
+    fontWeight: '700',
+    fontSize: font.small,
+  },
+  tabTextOn: {
+    color: colors.primary,
   },
   notice: {
     backgroundColor: colors.bgElevated,
@@ -219,6 +285,13 @@ function makeStyles(colors: ThemeColors) {
     color: colors.textMuted,
     fontSize: font.small,
     textAlign: 'center',
+  },
+  youHint: {
+    color: colors.textFaint,
+    fontSize: font.small,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+    fontWeight: '700',
   },
   list: {
     padding: spacing.md,

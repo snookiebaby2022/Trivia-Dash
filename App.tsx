@@ -133,16 +133,16 @@ export default function App() {
   }, []);
 
   return (
-    <DevClientGate>
-      <SafeAreaProvider>
-        <ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <DevClientGate>
           <ProfileProvider>
             <ShareCardProvider>
               <AppNavigation />
             </ShareCardProvider>
           </ProfileProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </DevClientGate>
+        </DevClientGate>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

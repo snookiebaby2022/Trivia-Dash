@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   is_pro          boolean not null default false,
   daily_streak    integer not null default 0,
   last_daily_date date,
+  best_match_score integer not null default 0,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );

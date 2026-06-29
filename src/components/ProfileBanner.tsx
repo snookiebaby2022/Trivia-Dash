@@ -49,7 +49,12 @@ export function ProfileBanner({
         accessibilityLabel="Change cover photo"
       >
         {profile.coverPhotoUri ? (
-          <Image source={{ uri: profile.coverPhotoUri }} style={styles.coverImage} resizeMode="cover" />
+          <Image
+            key={profile.coverPhotoUri}
+            source={{ uri: profile.coverPhotoUri }}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
         ) : (
           <View style={[styles.coverImage, { backgroundColor: gradEnd }]}>
             <View style={[styles.coverAccent, { backgroundColor: gradStart }]} />

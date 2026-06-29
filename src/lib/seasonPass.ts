@@ -154,6 +154,30 @@ export function buildSeasonXpSnapshot(
   };
 }
 
+export function claimSeasonReward(
+  progress: SeasonPassProgress,
+  level: number,
+  track: 'free' | 'pro',
+  isPro: boolean
+): { pass: SeasonPassProgress; coins: number } | null {
+  const tier = TIERS.find((t) => t.level === level);
+  if (!tier || progress.xp < tier.xpRequired) return null;
+
+  if (track === 'free') {
+    if (!tier.freeReward || progress.claimedFree.includes(level)) return null;
+    return {
+      pass: { ...progress, claimedFree: [...progress.claimedFree, level] },
+      coins: 50 + level * 5,
+    };
+  }
+
+  if (!isPro || !tier.proReward || progress.claimedPro.includes(level)) return null;
+  return {
+    pass: { ...progress, claimedPro: [...progress.claimedPro, level] },
+    coins: 100 + level * 10,
+  };
+}
+
 /** @deprecated use applyMatchSeasonXp */
 export function xpForMatch(_correct: number, isPro: boolean, weeklyBonus = false): number {
   let xp = xpGainOnWinStreak(isPro);

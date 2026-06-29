@@ -1,4 +1,5 @@
 import { CATEGORY_LIST } from './categoryTheme';
+import { mergeRecentQuestionIds } from './questionHistory';
 import { countEarnedWedges, WEDGE_UNLOCK_CORRECT } from './wedges';
 import type {
   AchievementState,
@@ -286,8 +287,10 @@ export function defaultProfileStats(): Profile['stats'] {
     quadWins: 0,
     seasonXp: 0,
     dailyBests: {},
+    bestMatchScore: 0,
     practiceCountToday: 0,
     dailyReminderEnabled: true,
+    recentQuestionIds: [],
   };
 }
 
@@ -439,6 +442,10 @@ export function bumpMatchStats(
       partyWins,
       passPlayWins,
       quadWins,
+      recentQuestionIds: mergeRecentQuestionIds(
+        profile.stats.recentQuestionIds,
+        summary.rounds.map((r) => r.questionId)
+      ),
     },
   };
   const newWedges = CATEGORY_LIST.filter(

@@ -28,6 +28,10 @@ android/
 # local smoke export
 dist-smoke-test/
 
+# local web export dirs
+dist-web-check/
+dist-web-test/
+
 # local EAS export scratch dirs
 .expo-tmp-export/
 .expo-tmp-export2/

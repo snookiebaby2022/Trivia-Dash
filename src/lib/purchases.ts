@@ -69,7 +69,8 @@ function getApiKey(): string {
 function canUseRevenueCat(): boolean {
   const apiKey = getApiKey();
   if (!apiKey || !getPurchasesModule()) return false;
-  if (apiKey.startsWith('test_') && !__DEV__) return false;
+  const allowTestInRelease = process.env.EXPO_PUBLIC_RC_ALLOW_TEST_IN_RELEASE === 'true';
+  if (apiKey.startsWith('test_') && !__DEV__ && !allowTestInRelease) return false;
   return true;
 }
 
@@ -275,9 +276,54 @@ export async function restoreProSubscription(): Promise<boolean> {
   }
 }
 
+async function presentPurchaseChooser(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Unlock everything',
+      'Full archive · no ads · all voices · ranked match & more.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        {
+          text: 'Monthly',
+          onPress: () => {
+            void purchaseMonthly()
+              .then(resolve)
+              .catch(() => resolve(false));
+          },
+        },
+        {
+          text: 'Yearly',
+          onPress: () => {
+            void purchaseYearly()
+              .then(resolve)
+              .catch(() => resolve(false));
+          },
+        },
+        {
+          text: 'Restore',
+          onPress: () => {
+            void restoreProSubscription().then(resolve);
+          },
+        },
+      ]
+    );
+  });
+}
+
 export async function presentProPaywall(): Promise<boolean> {
   const ui = getPaywallModule();
-  if (!ui || !purchasesConfigured()) return devUnlockFallback();
+  if (!purchasesConfigured()) {
+    if (__DEV__) return devUnlockFallback();
+    const mod = getPurchasesModule();
+    if (mod) return presentPurchaseChooser();
+    Alert.alert(
+      'Unlock everything',
+      'Subscriptions work when you install from Google Play (closed testing). Sideloaded APKs cannot bill until you publish to a test track.'
+    );
+    return false;
+  }
+
+  if (!ui) return presentPurchaseChooser();
 
   try {
     const result = await ui.default.presentPaywall({ displayCloseButton: true });
@@ -292,7 +338,7 @@ export async function presentProPaywall(): Promise<boolean> {
   } catch (e) {
     console.warn('[RevenueCat] paywall failed', e);
     if (__DEV__) return devUnlockFallback();
-    return false;
+    return presentPurchaseChooser();
   }
 }
 

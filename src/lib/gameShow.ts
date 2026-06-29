@@ -20,3 +20,15 @@ export function countdownLabel(n: number): string {
   if (n === 3) return 'Three';
   return String(n);
 }
+
+export function countdownVoiceLine(n: number): string {
+  if (n <= 0) return "Let's go!";
+  if (n === 1) return 'One!';
+  if (n === 2) return 'Two!';
+  if (n === 3) return 'Three!';
+  return `${n}!`;
+}
+
+export function preMatchCountdownLine(modeLabel: string): string {
+  return `Get ready for ${modeLabel}. Three, two, one, go!`;
+}

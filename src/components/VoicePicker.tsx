@@ -86,7 +86,7 @@ export function VoicePicker({preset,
         </Text>
       </Pressable>
 
-      <Text style={styles.note}>Tap ▶ to preview · voice stays off during play</Text>
+      <Text style={styles.note}>Enable in Settings → Host voiceover · tap ▶ to preview</Text>
     </View>
   );
 }

@@ -9,6 +9,7 @@ import { FloatingReactions } from '../components/FloatingReactions';
 import { LiveStatsPanel } from '../components/LiveStatsPanel';
 import { MatchCelebrationOverlay } from '../components/MatchCelebrationOverlay';
 import { ReactionBar } from '../components/ReactionBar';
+import { PowerUpBar } from '../components/PowerUpBar';
 import { TriviaCard } from '../components/TriviaCard';
 import { WedgeTracker } from '../components/WedgeTracker';
 import { useProfile } from '../context/ProfileContext';
@@ -26,8 +27,17 @@ import {
   reportPartyScore,
   subscribeOnlineMatch,
 } from '../lib/matchmaking';
+import { comboLabel } from '../lib/combo';
+import { COINS_PER_CORRECT } from '../lib/coins';
+import {
+  applyFiftyFifty,
+  consumePowerUp,
+  defaultPowerUpInventory,
+  EXTRA_TIME_MS,
+} from '../lib/powerUps';
 import { ROUND_TIME_MS, scoreAnswer } from '../lib/scoring';
 import { finalizeProfileAfterMatch } from '../lib/achievements';
+import { syncPlayGamesAfterMatch } from '../lib/playGames';
 import {
   announceCelebration,
   hapticSuccess,
@@ -42,7 +52,7 @@ import {
   subscribePartyReactions,
   type ReactionEmoji,
 } from '../lib/reactions';
-import { speakQuestion, stopSpeaking } from '../lib/speech';
+import { speakQuestion, speakLine, stopSpeaking } from '../lib/speech';
 import { isHarveyStylePack } from '../lib/voiceCatalog';
 import {
   applyResult,
@@ -51,10 +61,12 @@ import {
   startRound,
 } from '../lib/matchStats';
 import type { RootStackParamList } from '../navigation';
-import { playQuestionChime } from '../lib/audio';
-import { countdownLabel, hostIntroLine } from '../lib/gameShow';
+import { countdownLabel, countdownVoiceLine, hostIntroLine } from '../lib/gameShow';
+import { getRecentQuestionIds } from '../lib/questionHistory';
+import { startCategoryAmbience, stopCategoryAmbience } from '../lib/categoryAmbience';
 import { canUsePictureRounds } from '../lib/entitlements';
 import { submitDailyScore } from '../lib/dailyLeaderboard';
+import { submitOnlineHighScore } from '../lib/leaderboard';
 import { makeBot } from '../lib/ghost';
 import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
 import { bumpCategoryPlay } from '../lib/categoryStats';
@@ -67,6 +79,8 @@ import type {
   OpponentInfo,
   PartyReaction,
   PlayerLiveStats,
+  PowerUpType,
+  Profile,
   Question,
   RoundResult,
 } from '../types';
@@ -76,17 +90,25 @@ type Phase = 'searching' | 'countdown' | 'playing';
 
 export function GameScreen({ navigation, route }: Props) {
   const params = route.params ?? { mode: 'solo' as const };
-  const { profile, update } = useProfile();
+  const { profile, update, grantMatchCoins } = useProfile();
   const { colors } = useTheme();
   const styles = useMemo(() => makeGameStyles(colors), [colors]);
 
   const [opponent, setOpponent] = useState<OpponentInfo | null>(params.opponent ?? null);
   const [matchId, setMatchId] = useState<string | undefined>(params.matchId);
-  const [questionSeed, setQuestionSeed] = useState(params.questionSeed);
+  const [questionSeed, setQuestionSeed] = useState(
+    params.questionSeed ?? Date.now() ^ Math.floor(Math.random() * 1e9)
+  );
   const [searchLabel, setSearchLabel] = useState('Finding party players…');
 
   const botDiff = params.botDifficulty ?? 'easy';
-  const isSoloLike = params.mode === 'solo' || params.mode === 'practice';
+  const isEndless = params.mode === 'endless';
+  const isTimed = params.mode === 'timed';
+  const isSoloLike =
+    params.mode === 'solo' ||
+    params.mode === 'practice' ||
+    isEndless ||
+    isTimed;
   const isRanked = params.mode === 'ranked';
 
   const ghost = useMemo<Ghost>(() => {
@@ -112,20 +134,28 @@ export function GameScreen({ navigation, route }: Props) {
     const count =
       params.ugcPackId && params.questionIds?.length
         ? Math.min(params.questionIds.length, 15)
-        : 7;
+        : isEndless
+          ? 30
+          : isTimed
+            ? 50
+            : 7;
     return pickMatchQuestions(count, questionSeed, {
       isPro: profile?.isPro ?? false,
       questionIds: params.questionIds,
       category: params.category,
       includePictures,
+      recentIds: getRecentQuestionIds(profile?.stats),
     });
   }, [
     questionSeed,
     profile?.isPro,
+    profile?.stats,
     params.questionIds,
     params.category,
     params.mode,
     params.ugcPackId,
+    isEndless,
+    isTimed,
   ]);
 
   const [phase, setPhase] = useState<Phase>(
@@ -142,9 +172,15 @@ export function GameScreen({ navigation, route }: Props) {
   const [liveStats, setLiveStats] = useState<PlayerLiveStats[]>([]);
   const [celebration, setCelebration] = useState<CelebrationPayload | null>(null);
   const [reactions, setReactions] = useState<PartyReaction[]>([]);
+  const [visibleOptions, setVisibleOptions] = useState<number[] | null>(null);
+  const [comboFlash, setComboFlash] = useState<string | null>(null);
+  const [timedLeftMs, setTimedLeftMs] = useState(90_000);
 
   const rounds = useRef<RoundResult[]>([]);
   const matchStreak = useRef(0);
+  const maxComboStreak = useRef(0);
+  const endlessWrong = useRef(0);
+  const extraTimeMs = useRef(0);
   const roundStart = useRef(0);
   const progress = useRef(new Animated.Value(1)).current;
   const countdownScale = useRef(new Animated.Value(1)).current;
@@ -160,7 +196,10 @@ export function GameScreen({ navigation, route }: Props) {
     timers.current = [];
   }, []);
 
-  useEffect(() => () => stopSpeaking(), []);
+  useEffect(() => () => {
+    stopSpeaking();
+    stopCategoryAmbience();
+  }, []);
 
   const showReactions = params.mode === 'party' || Boolean(params.lobbyId);
 
@@ -171,6 +210,14 @@ export function GameScreen({ navigation, route }: Props) {
     });
     return () => unsub?.();
   }, [params.lobbyId, showReactions]);
+
+  useEffect(() => {
+    if (phase !== 'countdown' || !profile?.voiceEnabled) return;
+    void speakLine(countdownVoiceLine(countdown), {
+      preset: profile.voicePreset,
+      enabled: true,
+    });
+  }, [phase, countdown, profile?.voiceEnabled, profile?.voicePreset]);
 
   useEffect(() => {
     if (phase !== 'countdown') return;
@@ -211,6 +258,7 @@ export function GameScreen({ navigation, route }: Props) {
     };
 
     const runVoice = async () => {
+      void startCategoryAmbience(q.category);
       if (profile.voiceEnabled) {
         await speakQuestion(hostIntroLine(index + 1, questions.length, q.category), {
           preset: profile.voicePreset,
@@ -222,10 +270,9 @@ export function GameScreen({ navigation, route }: Props) {
           enabled: true,
         });
         if (cancelled) return;
-        void playQuestionChime();
-        setTimeout(showOptions, 350);
+        setTimeout(showOptions, 280);
       } else {
-        setTimeout(showOptions, 500);
+        setTimeout(showOptions, 350);
       }
     };
 
@@ -341,7 +388,11 @@ export function GameScreen({ navigation, route }: Props) {
         : null;
     const dailyStreak = dailyResult?.streak ?? profile.dailyStreak;
 
-    const isSolo = params.mode === 'solo' || params.mode === 'practice';
+    const isSolo =
+      params.mode === 'solo' ||
+      params.mode === 'practice' ||
+      params.mode === 'endless' ||
+      params.mode === 'timed';
     const profilePatch = isSolo
       ? {}
       : {
@@ -421,14 +472,18 @@ export function GameScreen({ navigation, route }: Props) {
       ...bumpCategoryPlay(enriched, playCat, matchStreak.current),
       seasonXp: (enriched.stats.seasonXp ?? 0) + xpGain,
       dailyBests,
+      bestMatchScore: Math.max(enriched.stats.bestMatchScore ?? 0, you),
     };
 
-    void update({
+    const nextProfile: Profile = {
+      ...enriched,
       ...profilePatch,
-      achievementState: enriched.achievementState,
       stats,
       seasonPass,
-    });
+    };
+
+    void update(nextProfile);
+    void submitOnlineHighScore(nextProfile, you);
 
     const summaryWithWedges: MatchSummary = {
       ...summaryBase,
@@ -450,10 +505,35 @@ export function GameScreen({ navigation, route }: Props) {
       emoji: a.emoji,
     }));
 
+    const correctCount = rounds.current.filter((r) => r.correct).length;
+    const won = outcome === 'win' || (isSolo && you > 0);
+    void grantMatchCoins(correctCount, won);
+
+    void syncPlayGamesAfterMatch({
+      score: you,
+      maxComboStreak: maxComboStreak.current,
+      unlockedAchievementIds: newlyUnlocked.map((a) => a.id),
+    });
+
     navigation.replace('Result', {
       summary: { ...summaryWithWedges, milestones, achievementUnlocks, seasonXp: seasonXpSnapshot },
     });
-  }, [profile, oppScore, ghost, opponent, update, navigation, params, questions]);
+  }, [profile, oppScore, ghost, opponent, update, navigation, params, questions, grantMatchCoins]);
+
+  useEffect(() => {
+    if (phase !== 'playing' || !isTimed) return;
+    const tick = setInterval(() => {
+      setTimedLeftMs((ms) => {
+        if (ms <= 1000) {
+          clearInterval(tick);
+          void finishMatch();
+          return 0;
+        }
+        return ms - 1000;
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [phase, isTimed, finishMatch]);
 
   const advance = useCallback(() => {
     clearTimers();
@@ -472,12 +552,19 @@ export function GameScreen({ navigation, route }: Props) {
   const recordAndAdvance = useCallback(
     (sel: number | null) => {
       const q = questions[index];
-      const ms = sel === null ? ROUND_TIME_MS : Date.now() - roundStart.current;
+      const ms = sel === null ? ROUND_TIME_MS + extraTimeMs.current : Date.now() - roundStart.current;
       const correct = sel !== null && sel === q.answer;
-      const points = scoreAnswer(correct, ms);
+      const streakForScore = correct ? matchStreak.current + 1 : matchStreak.current;
+      const points = scoreAnswer(correct, ms, streakForScore);
       rounds.current.push({ questionId: q.id, selected: sel, correct, ms, points });
       if (correct) {
         matchStreak.current += 1;
+        maxComboStreak.current = Math.max(maxComboStreak.current, matchStreak.current);
+        const label = comboLabel(matchStreak.current);
+        if (label) {
+          setComboFlash(label);
+          setTimeout(() => setComboFlash(null), 900);
+        }
         void hapticSuccess();
         const harvey = profile?.voicePreset
           ? isHarveyStylePack(profile.voicePreset)
@@ -505,6 +592,14 @@ export function GameScreen({ navigation, route }: Props) {
         }
       } else {
         matchStreak.current = 0;
+        if (isEndless) {
+          endlessWrong.current += 1;
+          if (endlessWrong.current >= 3) {
+            const t = setTimeout(() => void finishMatch(), 1100);
+            timers.current.push(t);
+            return;
+          }
+        }
       }
       if (profile) {
         setLiveStats((s) => applyResult(s, profile.id, { correct, ms, points }));
@@ -518,7 +613,33 @@ export function GameScreen({ navigation, route }: Props) {
       const t = setTimeout(advance, 1100);
       timers.current.push(t);
     },
-    [questions, index, advance, matchId, profile, params.lobbyId]
+    [questions, index, advance, matchId, profile, params.lobbyId, isEndless, finishMatch]
+  );
+
+  const usePowerUp = useCallback(
+    (type: PowerUpType) => {
+      if (!profile || locked) return;
+      const next = consumePowerUp(profile, type);
+      if (!next) return;
+      void update(next);
+      const q = questions[index];
+      if (type === 'fiftyFifty') {
+        setVisibleOptions(applyFiftyFifty(q));
+      } else if (type === 'extraTime') {
+        extraTimeMs.current += EXTRA_TIME_MS;
+        progress.stopAnimation();
+        progress.setValue(1);
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: ROUND_TIME_MS + extraTimeMs.current,
+          useNativeDriver: false,
+        }).start();
+      } else if (type === 'skip') {
+        setLocked(true);
+        recordAndAdvance(null);
+      }
+    },
+    [profile, locked, questions, index, update, progress, recordAndAdvance]
   );
 
   const onSelect = useCallback(
@@ -549,7 +670,7 @@ export function GameScreen({ navigation, route }: Props) {
     progress.setValue(1);
     Animated.timing(progress, {
       toValue: 0,
-      duration: ROUND_TIME_MS,
+      duration: ROUND_TIME_MS + extraTimeMs.current,
       useNativeDriver: false,
     }).start();
 
@@ -582,7 +703,7 @@ export function GameScreen({ navigation, route }: Props) {
         const advanceTimer = setTimeout(() => recordAndAdvance(null), 700);
         timers.current.push(advanceTimer);
       }
-    }, ROUND_TIME_MS);
+    }, ROUND_TIME_MS + extraTimeMs.current);
     timers.current.push(timeout);
 
     return clearTimers;
@@ -601,17 +722,28 @@ export function GameScreen({ navigation, route }: Props) {
   }
 
   if (phase === 'countdown') {
-    const isSolo = params.mode === 'solo' || params.mode === 'practice';
     return (
       <SafeAreaView style={styles.center}>
-        {isSolo ? (
+        {isSoloLike ? (
           <>
             <AvatarView avatar={profile!.avatar} size={80} showRing />
             <Text style={styles.soloTitle}>
-              {params.ugcPackTitle ? `📦 ${params.ugcPackTitle}` : 'Quick Match'}
+              {params.ugcPackTitle
+                ? `📦 ${params.ugcPackTitle}`
+                : isEndless
+                  ? '♾️ Endless Dash'
+                  : isTimed
+                    ? '⏱ Timed Challenge'
+                    : 'Quick Match'}
             </Text>
             <Text style={styles.soloSub}>
-              {params.ugcPackTitle ? 'Community pack' : 'Solo run · race the clock'}
+              {params.ugcPackTitle
+                ? 'Community pack'
+                : isEndless
+                  ? '3 wrong answers ends the run · combo multipliers'
+                  : isTimed
+                    ? '90 seconds · answer as many as you can'
+                    : 'Solo run · race the clock'}
             </Text>
           </>
         ) : (
@@ -661,6 +793,10 @@ export function GameScreen({ navigation, route }: Props) {
       <View style={styles.timerTrack}>
         <Animated.View style={[styles.timerFill, { width: widthInterpolate, backgroundColor: catTheme.fill }]} />
       </View>
+      {isTimed && (
+        <Text style={styles.timedLabel}>⏱ {Math.ceil(timedLeftMs / 1000)}s left</Text>
+      )}
+      {comboFlash && <Text style={styles.comboFlash}>{comboFlash}</Text>}
 
       <ScrollView
         style={styles.scroll}
@@ -702,6 +838,14 @@ export function GameScreen({ navigation, route }: Props) {
           />
         </View>
 
+        {profile && (isSoloLike || params.mode === 'daily') && (
+          <PowerUpBar
+            inventory={profile.powerUps ?? defaultPowerUpInventory()}
+            disabled={locked}
+            onUse={usePowerUp}
+          />
+        )}
+
         {showReactions && <ReactionBar onReact={onReact} disabled={locked} />}
 
         <View style={styles.options}>
@@ -709,6 +853,7 @@ export function GameScreen({ navigation, route }: Props) {
             <Text style={styles.optionsWait}>Think about it… answers coming up</Text>
           )}
           {q.options.map((opt, i) => {
+            if (visibleOptions && !visibleOptions.includes(i)) return null;
             const isSelected = selected === i;
             const reveal = revealAnswers;
             const isAnswer = i === q.answer;
@@ -834,6 +979,20 @@ function makeGameStyles(colors: ThemeColors) {
     height: 8,
     borderRadius: radius.pill,
     backgroundColor: colors.warning,
+  },
+  timedLabel: {
+    color: colors.accent,
+    fontSize: font.small,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  comboFlash: {
+    color: colors.gold,
+    fontSize: font.h3,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   scroll: {
     flex: 1,

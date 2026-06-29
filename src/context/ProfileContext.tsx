@@ -1,7 +1,16 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
+import { addCoins, COINS_MATCH_WIN, COINS_PER_CORRECT } from '../lib/coins';
+import {
+  buyPowerUpWithCoins,
+  grantPowerUpPack,
+  POWER_UP_COSTS,
+} from '../lib/powerUps';
+import { claimLoginStreakReward } from '../lib/streakRewards';
 import { initAds, showRewardedAd } from '../lib/ads';
+import { refreshAudioMode } from '../lib/audio';
+import { setSfxEnabled as setGlobalSfxEnabled } from '../lib/gameAudio';
 import {
   type AuthUser,
   authUserFromSession,
@@ -37,7 +46,7 @@ import {
 import { loadProfile, saveProfile } from '../lib/storage';
 import { pickAndPersistProfileImage, removePersistedImage } from '../lib/profilePhotos';
 import { syncProfile } from '../lib/leaderboard';
-import type { AvatarConfig, Profile, VoicePreset } from '../types';
+import type { AvatarConfig, PowerUpType, Profile, VoicePreset } from '../types';
 
 interface ProfileContextValue {
   profile: Profile | null;
@@ -59,6 +68,7 @@ interface ProfileContextValue {
   setAvatar: (avatar: AvatarConfig) => Promise<void>;
   setVoicePreset: (preset: VoicePreset) => Promise<void>;
   setVoiceEnabled: (enabled: boolean) => Promise<void>;
+  setSfxEnabled: (enabled: boolean) => Promise<void>;
   setProfilePhoto: () => Promise<void>;
   setCoverPhoto: () => Promise<void>;
   removeProfilePhoto: () => Promise<void>;
@@ -68,6 +78,9 @@ interface ProfileContextValue {
   restorePurchases: () => Promise<boolean>;
   manageSubscription: () => Promise<void>;
   watchRewardedAd: (placement: RewardedPlacement) => Promise<boolean>;
+  claimLoginReward: () => Promise<number>;
+  buyPowerUp: (type: PowerUpType) => Promise<boolean>;
+  grantMatchCoins: (correctCount: number, won: boolean) => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | undefined>(undefined);
@@ -97,6 +110,8 @@ function applyProStatus(prev: Profile, isPro: boolean): Profile {
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+  profileRef.current = profile;
   const [loading, setLoading] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
@@ -116,6 +131,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    setGlobalSfxEnabled(profile?.sfxEnabled ?? false);
+    void refreshAudioMode();
+  }, [profile?.sfxEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -326,8 +346,18 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           return next;
         });
       },
+      setSfxEnabled: async (enabled) => {
+        setGlobalSfxEnabled(enabled);
+        void refreshAudioMode();
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, sfxEnabled: enabled };
+          void saveProfile(next);
+          return next;
+        });
+      },
       setProfilePhoto: async () => {
-        const id = profile?.id;
+        const id = profileRef.current?.id;
         if (!id) return;
         const uri = await pickAndPersistProfileImage(id, 'profile');
         if (!uri) return;
@@ -340,7 +370,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         });
       },
       setCoverPhoto: async () => {
-        const id = profile?.id;
+        const id = profileRef.current?.id;
         if (!id) return;
         const uri = await pickAndPersistProfileImage(id, 'cover');
         if (!uri) return;
@@ -353,7 +383,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         });
       },
       removeProfilePhoto: async () => {
-        const id = profile?.id;
+        const id = profileRef.current?.id;
         if (!id) return;
         await removePersistedImage(id, 'profile');
         setProfile((prev) => {
@@ -365,7 +395,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         });
       },
       removeCoverPhoto: async () => {
-        const id = profile?.id;
+        const id = profileRef.current?.id;
         if (!id) return;
         await removePersistedImage(id, 'cover');
         setProfile((prev) => {
@@ -429,15 +459,53 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         if (!ok) return false;
         setProfile((prev) => {
           if (!prev) return prev;
-          const patch =
-            placement === 'daily_retry'
-              ? applyDailyExtraPlay(prev)
-              : applyStreakShield(prev);
-          const next = { ...prev, ...patch };
+          let next = prev;
+          if (placement === 'daily_retry') {
+            next = { ...prev, ...applyDailyExtraPlay(prev) };
+          } else if (placement === 'streak_shield') {
+            next = { ...prev, ...applyStreakShield(prev) };
+          } else if (placement === 'power_up_pack') {
+            next = grantPowerUpPack(prev);
+          }
           void saveProfile(next);
           return next;
         });
         return true;
+      },
+      claimLoginReward: async () => {
+        let granted = 0;
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const { profile: next, coins } = claimLoginStreakReward(prev);
+          granted = coins;
+          void saveProfile(next);
+          return next;
+        });
+        return granted;
+      },
+      buyPowerUp: async (type) => {
+        let ok = false;
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = buyPowerUpWithCoins(prev, type);
+          if (!next) return prev;
+          ok = true;
+          void saveProfile(next);
+          return next;
+        });
+        if (!ok) {
+          Alert.alert('Not enough coins', `Need ${POWER_UP_COSTS[type]} coins.`);
+        }
+        return ok;
+      },
+      grantMatchCoins: async (correctCount, won) => {
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const amount = correctCount * COINS_PER_CORRECT + (won ? COINS_MATCH_WIN : 0);
+          const next = addCoins(prev, amount);
+          void saveProfile(next);
+          return next;
+        });
       },
     }),
     [profile, loading, authUser, authBusy, applyAuthUser, signInWithGoogle, signInWithApple, signInWithFacebook, signUpWithEmail, signInWithEmail, signOut, signOutGoogle]

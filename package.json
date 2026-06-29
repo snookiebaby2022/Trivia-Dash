@@ -1,6 +1,6 @@
 {
   "name": "trivia-dash",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start --dev-client",
@@ -17,6 +17,7 @@
     "build:apk": "powershell -ExecutionPolicy Bypass -File ./scripts/eas-build.ps1 preview android",
     "build:play": "powershell -ExecutionPolicy Bypass -File ./scripts/eas-build.ps1 production android",
     "build:local:aab": "powershell -ExecutionPolicy Bypass -File ./scripts/local-release.ps1",
+    "build:local:apk": "powershell -ExecutionPolicy Bypass -File ./scripts/local-apk.ps1",
     "build:dev:ios": "powershell -ExecutionPolicy Bypass -File ./scripts/eas-build.ps1 development ios",
     "smoke": "npx tsx scripts/smoke-test.ts",
     "smoke:bundle": "expo export --platform android --output-dir dist-smoke-test",
@@ -45,6 +46,7 @@
     "expo-speech": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-store-review": "~9.0.9",
+    "expo-stores-games-services": "^0.1.13",
     "expo-system-ui": "~6.0.9",
     "expo-web-browser": "~15.0.11",
     "react": "19.1.0",

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trivia Dash",
     "slug": "trivia-dash",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "triviadash",
@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.lizzi.triviadash",
+      "versionCode": 20,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0B16"

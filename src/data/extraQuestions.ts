@@ -10,7 +10,7 @@ const RAW: Omit<Question, 'tier'>[] = [
   { id: 'ex6', category: 'General', prompt: 'How many days in a leap year?', options: ['365', '366', '364', '367'], answer: 1 },
   { id: 'ex7', category: 'Entertainment', prompt: 'Studio behind Mario?', options: ['Sega', 'Nintendo', 'Sony', 'Microsoft'], answer: 1 },
   { id: 'ex8', category: 'Pop Culture', prompt: 'Twitter rebranded to…', options: ['Threads', 'X', 'Blue', 'Sky'], answer: 1 },
-  { id: 'ex9', category: 'Art', prompt: 'Mona Lisa artist?', options: ['Van Gogh', 'Da Vinci', 'Monet', 'Picasso'], answer: 1 },
+  { id: 'ex9', category: 'Art', prompt: 'Who painted the Mona Lisa?', options: ['Van Gogh', 'Leonardo da Vinci', 'Monet', 'Picasso'], answer: 1 },
   { id: 'ex10', category: 'Literature', prompt: 'Who wrote "1984"?', options: ['Orwell', 'Huxley', 'Bradbury', 'Asimov'], answer: 0 },
   { id: 'ex11', category: 'Technology', prompt: 'HTML stands for…', options: ['HyperText Markup Language', 'High Transfer Machine Language', 'Home Tool Markup Language', 'Hyperlink Text Mode Language'], answer: 0 },
   { id: 'ex12', category: 'Nature', prompt: 'Largest ocean?', options: ['Atlantic', 'Pacific', 'Indian', 'Arctic'], answer: 1 },

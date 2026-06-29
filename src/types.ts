@@ -63,6 +63,10 @@ export interface ProfileStats {
   seasonXp: number;
   /** dateKey → best daily score */
   dailyBests: Record<string, number>;
+  /** Best total points in a single match (online leaderboard). */
+  bestMatchScore?: number;
+  /** Recently seen question ids — avoids repeats across matches. */
+  recentQuestionIds?: string[];
   /** ISO date of last practice day + count */
   practiceDay?: string;
   practiceCountToday?: number;
@@ -80,6 +84,14 @@ export interface AchievementState {
 
 export type AuthProvider = 'google' | 'email' | 'apple' | 'facebook';
 
+export type PowerUpType = 'fiftyFifty' | 'extraTime' | 'skip';
+
+export interface PowerUpInventory {
+  fiftyFifty: number;
+  extraTime: number;
+  skip: number;
+}
+
 export interface Profile {
   id: string;
   username: string;
@@ -88,6 +100,8 @@ export interface Profile {
   avatar: AvatarConfig;
   voicePreset: VoicePreset;
   voiceEnabled: boolean;
+  /** SFX, ambience, celebration stingers (off by default). */
+  sfxEnabled: boolean;
   elo: number;
   wins: number;
   losses: number;
@@ -101,6 +115,13 @@ export interface Profile {
   dailyExtraPlayDate?: string;
   /** Protects daily streak once if a day is missed. */
   streakShield: boolean;
+  /** Soft currency for power-ups and shop. */
+  coins: number;
+  /** Consecutive days the player claimed login rewards. */
+  loginStreak: number;
+  lastLoginDate?: string;
+  lastLoginRewardDate?: string;
+  powerUps: PowerUpInventory;
   achievementState: AchievementState;
   stats: ProfileStats;
   seasonPass?: SeasonPassProgress;
@@ -157,6 +178,8 @@ export interface LeaderboardEntry {
   wins: number;
   rank: number;
   avatar?: AvatarConfig;
+  bestMatchScore?: number;
+  leaderboardMode?: 'elo' | 'score';
 }
 
 export interface RoundResult {
@@ -198,7 +221,9 @@ export type MatchMode =
   | 'quad'
   | 'passplay'
   | 'livehost'
-  | 'friendparty';
+  | 'friendparty'
+  | 'endless'
+  | 'timed';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'unbeatable';
 

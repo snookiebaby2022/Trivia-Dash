@@ -22,7 +22,8 @@ import { getCategoryTheme } from '../lib/categoryTheme';
 import { detectMilestones } from '../lib/milestones';
 import { buildSeasonXpSnapshot, ensureSeasonPass } from '../lib/seasonPass';
 import { ROUND_TIME_MS, scoreAnswer } from '../lib/scoring';
-import { speakQuestion, stopSpeaking } from '../lib/speech';
+import { speakQuestion, speakLine, stopSpeaking } from '../lib/speech';
+import { countdownVoiceLine } from '../lib/gameShow';
 import { isHarveyStylePack } from '../lib/voiceCatalog';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
@@ -69,6 +70,14 @@ export function PassPlayGameScreen({ navigation, route }: Props) {
   }, []);
 
   useEffect(() => () => stopSpeaking(), []);
+
+  useEffect(() => {
+    if (phase !== 'countdown' || !profile?.voiceEnabled) return;
+    void speakLine(countdownVoiceLine(countdown), {
+      preset: profile.voicePreset,
+      enabled: true,
+    });
+  }, [phase, countdown, profile?.voiceEnabled, profile?.voicePreset]);
 
   useEffect(() => {
     if (phase !== 'countdown') return;
