@@ -46,7 +46,7 @@ import {
 import { loadProfile, saveProfile } from '../lib/storage';
 import { pickAndPersistProfileImage, removePersistedImage } from '../lib/profilePhotos';
 import { syncProfile } from '../lib/leaderboard';
-import { initOfflineSync } from '../lib/offlineSync';
+
 import type { AvatarConfig, PowerUpType, Profile, VoicePreset } from '../types';
 
 interface ProfileContextValue {

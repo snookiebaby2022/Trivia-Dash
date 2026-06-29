@@ -78,7 +78,7 @@ import { calculateCategoryStreakBonus } from '../lib/categoryStreaks';
 import { WEDGE_UNLOCK_CORRECT } from '../lib/wedges';
 import { DynamicHost } from '../components/DynamicHost';
 import { getReaction, type HostReaction } from '../lib/personality';
-import { onCorrectAnswer as crowdCorrect, onWrongAnswer as crowdWrong, onNewRecord, onGameStart, onGameOver, resetCrowd } from '../lib/crowd';
+import { onCorrectAnswer as crowdCorrect, onWrongAnswer as crowdWrong, onGameStart, onGameOver, resetCrowd } from '../lib/crowd';
 import { captureMoment, buildHighlightReel } from '../lib/highlightReel';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';

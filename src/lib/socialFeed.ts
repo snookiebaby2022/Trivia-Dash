@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AvatarConfig } from '../types';
-import { getFriends, getFriendIds } from './friends';
+import { getFriends } from './friends';
 import { AVATAR_EMOJIS, AVATAR_COLORS } from './avatars';
 
 export type FeedItemType =
