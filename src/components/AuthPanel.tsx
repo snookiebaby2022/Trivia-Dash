@@ -40,8 +40,11 @@ export function AuthPanel({ compact }: { compact?: boolean }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const styles = makeStyles(colors);
+
+  if (dismissed) return null;
 
   if (!isSupabaseConfigured) {
     return (
@@ -183,6 +186,10 @@ export function AuthPanel({ compact }: { compact?: boolean }) {
             onPress={() => setShowEmailForm(true)}
           >
             <Text style={styles.emailToggleText}>✉  Sign up / log in with email</Text>
+          </Pressable>
+
+          <Pressable style={({ pressed }) => [styles.guestBtn, pressed && { opacity: 0.7 }]} onPress={() => setDismissed(true)}>
+            <Text style={styles.guestBtnText}>Continue as Guest →</Text>
           </Pressable>
         </>
       )}
@@ -390,6 +397,16 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       color: colors.textMuted,
       fontSize: font.small,
       textAlign: 'center',
+    },
+    guestBtn: {
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    guestBtnText: {
+      color: colors.textMuted,
+      fontSize: font.small,
+      fontWeight: '700',
     },
   });
 }
