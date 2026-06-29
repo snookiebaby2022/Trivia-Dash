@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 
 const SOUND_PACK_KEY = 'bb.sound_pack.v1';
 
@@ -18,6 +17,56 @@ export const SOUND_PACKS: SoundPackDef[] = [
   { id: 'modern', label: 'Modern', description: 'Clean, minimal tones', emoji: '✨' },
   { id: 'dramatic', label: 'Dramatic', description: 'Intense orchestral hits', emoji: '🎬' },
 ];
+
+const SOUND_NAMES = ['correct', 'wrong', 'tick', 'lock-in', 'countdown', 'combo', 'tension'] as const;
+type SoundName = typeof SOUND_NAMES[number];
+
+const classicAssets: Record<SoundName, number> = {
+  correct: require('../../assets/sounds/correct.mp3'),
+  wrong: require('../../assets/sounds/wrong.mp3'),
+  tick: require('../../assets/sounds/tick.mp3'),
+  'lock-in': require('../../assets/sounds/lock-in.mp3'),
+  countdown: require('../../assets/sounds/countdown.mp3'),
+  combo: require('../../assets/sounds/combo.mp3'),
+  tension: require('../../assets/sounds/tension.mp3'),
+};
+
+const retroAssets: Record<SoundName, number> = {
+  correct: require('../../assets/sounds/retro/correct.mp3'),
+  wrong: require('../../assets/sounds/retro/wrong.mp3'),
+  tick: require('../../assets/sounds/retro/tick.mp3'),
+  'lock-in': require('../../assets/sounds/retro/lock-in.mp3'),
+  countdown: require('../../assets/sounds/retro/countdown.mp3'),
+  combo: require('../../assets/sounds/retro/combo.mp3'),
+  tension: require('../../assets/sounds/retro/tension.mp3'),
+};
+
+const modernAssets: Record<SoundName, number> = {
+  correct: require('../../assets/sounds/modern/correct.mp3'),
+  wrong: require('../../assets/sounds/modern/wrong.mp3'),
+  tick: require('../../assets/sounds/modern/tick.mp3'),
+  'lock-in': require('../../assets/sounds/modern/lock-in.mp3'),
+  countdown: require('../../assets/sounds/modern/countdown.mp3'),
+  combo: require('../../assets/sounds/modern/combo.mp3'),
+  tension: require('../../assets/sounds/modern/tension.mp3'),
+};
+
+const dramaticAssets: Record<SoundName, number> = {
+  correct: require('../../assets/sounds/dramatic/correct.mp3'),
+  wrong: require('../../assets/sounds/dramatic/wrong.mp3'),
+  tick: require('../../assets/sounds/dramatic/tick.mp3'),
+  'lock-in': require('../../assets/sounds/dramatic/lock-in.mp3'),
+  countdown: require('../../assets/sounds/dramatic/countdown.mp3'),
+  combo: require('../../assets/sounds/dramatic/combo.mp3'),
+  tension: require('../../assets/sounds/dramatic/tension.mp3'),
+};
+
+const PACK_ASSETS: Record<SoundPackId, Record<SoundName, number>> = {
+  classic: classicAssets,
+  retro: retroAssets,
+  modern: modernAssets,
+  dramatic: dramaticAssets,
+};
 
 let currentPack: SoundPackId = 'classic';
 
@@ -49,24 +98,9 @@ export async function setSoundPack(id: SoundPackId): Promise<void> {
   }
 }
 
-/**
- * Get the require() source for a sound in the current pack.
- * Falls back to classic pack if the file doesn't exist.
- */
 export function getSoundAsset(soundName: string): number {
-  const pack = currentPack;
-  try {
-    if (pack === 'retro') {
-      return require(`../../assets/sounds/retro/${soundName}.mp3`);
-    }
-    if (pack === 'modern') {
-      return require(`../../assets/sounds/modern/${soundName}.mp3`);
-    }
-    if (pack === 'dramatic') {
-      return require(`../../assets/sounds/dramatic/${soundName}.mp3`);
-    }
-  } catch {
-    // fallback to classic
-  }
-  return require(`../../assets/sounds/${soundName}.mp3`);
+  const name = soundName as SoundName;
+  const assets = PACK_ASSETS[currentPack];
+  if (assets && name in assets) return assets[name];
+  return classicAssets[name] ?? classicAssets.correct;
 }
