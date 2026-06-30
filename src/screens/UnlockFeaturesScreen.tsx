@@ -1,7 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useMemo } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -46,8 +46,35 @@ export function UnlockFeaturesScreen({}: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const { profile } = useProfile();
+  const { profile, showProPaywall } = useProfile();
   const [showPro, setShowPro] = React.useState(false);
+  const [buying, setBuying] = React.useState(false);
+
+  const handleMonthly = async () => {
+    setBuying(true);
+    try {
+      const ok = await purchaseMonthly();
+      if (ok) Alert.alert('Subscribed!', 'Welcome to Trivia Dash Pro!');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not start purchase';
+      Alert.alert('Purchase error', msg);
+    } finally {
+      setBuying(false);
+    }
+  };
+
+  const handleYearly = async () => {
+    setBuying(true);
+    try {
+      const ok = await purchaseYearly();
+      if (ok) Alert.alert('Subscribed!', 'Welcome to Trivia Dash Pro!');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not start purchase';
+      Alert.alert('Purchase error', msg);
+    } finally {
+      setBuying(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -83,7 +110,8 @@ export function UnlockFeaturesScreen({}: Props) {
                     <Text style={styles.planPrice}>{PRO_PRICE_LABEL}</Text>
                     <PrimaryButton
                       label="Subscribe Monthly"
-                      onPress={() => void purchaseMonthly()}
+                      onPress={handleMonthly}
+                      disabled={buying}
                     />
                   </View>
                   <View style={styles.planOption}>
@@ -92,7 +120,8 @@ export function UnlockFeaturesScreen({}: Props) {
                     <PrimaryButton
                       label="Subscribe Yearly"
                       variant="accent"
-                      onPress={() => void purchaseYearly()}
+                      onPress={handleYearly}
+                      disabled={buying}
                     />
                   </View>
                 </View>

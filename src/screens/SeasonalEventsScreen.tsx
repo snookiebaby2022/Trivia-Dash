@@ -5,6 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useTheme } from '../context/ThemeContext';
+import {
+  getActiveEvent,
+  getUpcomingEvents,
+  getEventTimeRemaining,
+  isEventActive,
+  type SeasonalEvent as LibEvent,
+} from '../lib/seasonalEvents';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -13,7 +20,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SeasonalEvents'>;
 
 type EventStatus = 'active' | 'upcoming' | 'past';
 
-interface SeasonalEvent {
+interface DisplayEvent {
   id: string;
   title: string;
   theme: string;
@@ -28,72 +35,27 @@ interface SeasonalEvent {
   playerScore?: number;
 }
 
-const MOCK_EVENTS: SeasonalEvent[] = [
-  {
-    id: 'sci_fi_week',
-    title: 'Sci-Fi Week',
-    theme: 'Sci-Fi Week',
-    emoji: '\u{1F680}',
-    categories: ['Space', 'Technology', 'Movies', 'Literature'],
-    entryCost: 150,
-    status: 'active',
-    startsAt: Date.now() - 2 * 86400000,
-    endsAt: Date.now() + 2 * 86400000 + 5 * 3600000 + 37 * 60000,
-    rewardPreview: 'Galaxy Frame',
-  },
-  {
-    id: 'kpop_kingdom',
-    title: 'K-Pop Kingdom',
-    theme: 'K-Pop Kingdom',
-    emoji: '\u{1F451}',
-    categories: ['K-Pop', 'Music', 'Entertainment'],
-    entryCost: 100,
-    status: 'upcoming',
-    startsAt: Date.now() + 3 * 86400000,
-    endsAt: Date.now() + 10 * 86400000,
-    rewardPreview: 'Crown Badge',
-  },
-  {
-    id: 'marvel_mayhem',
-    title: 'Marvel Mayhem',
-    theme: 'Marvel Mayhem',
-    emoji: '\u{1F9E9}',
-    categories: ['Marvel', 'Movies', 'Pop Culture'],
-    entryCost: 200,
-    status: 'upcoming',
-    startsAt: Date.now() + 7 * 86400000,
-    endsAt: Date.now() + 14 * 86400000,
-    rewardPreview: 'Hero Icon',
-  },
-  {
-    id: 'anime_arcade',
-    title: 'Anime Arcade',
-    theme: 'Anime Arcade',
-    emoji: '\u{1F3AE}',
-    categories: ['Anime', 'Gaming', 'Pop Culture'],
-    entryCost: 125,
-    status: 'past',
-    startsAt: Date.now() - 14 * 86400000,
-    endsAt: Date.now() - 7 * 86400000,
-    rewardPreview: 'Sakura Frame',
-    playerRank: 42,
-    playerScore: 1850,
-  },
-  {
-    id: 'disney_daze',
-    title: 'Disney Daze',
-    theme: 'Disney Daze',
-    emoji: '\u{1F3F0}',
-    categories: ['Disney', 'Movies', 'Art'],
-    entryCost: 100,
-    status: 'past',
-    startsAt: Date.now() - 30 * 86400000,
-    endsAt: Date.now() - 23 * 86400000,
-    rewardPreview: 'Castle Badge',
-    playerRank: 118,
-    playerScore: 980,
-  },
-];
+function eventToDisplay(e: LibEvent): DisplayEvent {
+  const start = new Date(e.startDate + 'T00:00:00').getTime();
+  const end = new Date(e.endDate + 'T23:59:59').getTime();
+  const now = Date.now();
+  let status: EventStatus = 'past';
+  if (isEventActive(e)) status = 'active';
+  else if (start > now) status = 'upcoming';
+
+  return {
+    id: e.id,
+    title: e.title,
+    theme: e.subtitle,
+    emoji: e.emoji,
+    categories: e.categories,
+    entryCost: e.entryCoins,
+    status,
+    startsAt: start,
+    endsAt: end,
+    rewardPreview: e.exclusiveReward.label,
+  };
+}
 
 function formatCountdown(ms: number): string {
   if (ms <= 0) return '00:00:00';
@@ -116,8 +78,16 @@ function formatDate(ts: number): string {
 export function SeasonalEventsScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [events] = useState<SeasonalEvent[]>(MOCK_EVENTS);
   const [now, setNow] = useState(Date.now());
+
+  const events = useMemo(() => {
+    const active = getActiveEvent();
+    const upcoming = getUpcomingEvents().filter((e) => !isEventActive(e));
+    const all: DisplayEvent[] = [];
+    if (active) all.push({ ...eventToDisplay(active), status: 'active' });
+    upcoming.forEach((e) => all.push({ ...eventToDisplay(e), status: 'upcoming' }));
+    return all;
+  }, []);
 
   useEffect(() => {
     const active = events.find((e) => e.status === 'active');
@@ -128,12 +98,10 @@ export function SeasonalEventsScreen({ navigation }: Props) {
 
   const activeEvent = events.find((e) => e.status === 'active');
   const upcoming = events.filter((e) => e.status === 'upcoming');
-  const past = events.filter((e) => e.status === 'past');
 
-  const enterEvent = (event: SeasonalEvent) => {
+  const enterEvent = (event: DisplayEvent) => {
     navigation.navigate('Game', {
       mode: 'solo',
-      category: event.categories[0] as any,
     });
   };
 
@@ -202,23 +170,6 @@ export function SeasonalEventsScreen({ navigation }: Props) {
                 </View>
               ))}
             </ScrollView>
-          </>
-        )}
-
-        {past.length > 0 && (
-          <>
-            <Text style={[styles.sectionLabel, { color: colors.textFaint }]}>Past Events</Text>
-            {past.map((event) => (
-              <View key={event.id} style={[styles.pastCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Text style={styles.pastEmoji}>{event.emoji}</Text>
-                <View style={styles.pastBody}>
-                  <Text style={[styles.pastTitle, { color: colors.textMuted }]}>{event.title}</Text>
-                  <Text style={[styles.pastRank, { color: colors.textFaint }]}>
-                    Final Rank: #{event.playerRank ?? '—'} · Score: {event.playerScore ?? '—'}
-                  </Text>
-                </View>
-              </View>
-            ))}
           </>
         )}
 
@@ -300,19 +251,5 @@ function makeStyles(colors: ThemeColors) {
     upcomingTitle: { fontSize: font.body, fontWeight: '800', textAlign: 'center' },
     upcomingDate: { fontSize: font.small },
     upcomingCost: { fontSize: font.small, fontWeight: '700' },
-
-    pastCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: radius.md,
-      borderWidth: 1,
-      padding: spacing.md,
-      gap: spacing.sm,
-      opacity: 0.7,
-    },
-    pastEmoji: { fontSize: 28 },
-    pastBody: { flex: 1 },
-    pastTitle: { fontSize: font.body, fontWeight: '700' },
-    pastRank: { fontSize: font.small, marginTop: 2 },
   });
 }

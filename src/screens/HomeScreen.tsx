@@ -20,7 +20,6 @@ import { LegalLinks } from '../components/LegalLinks';
 import { AvatarCustomizer } from '../components/AvatarCustomizer';
 import { ProfileBanner } from '../components/ProfileBanner';
 import { CategoryWheel } from '../components/CategoryWheel';
-import { PlayGamesPanel } from '../components/PlayGamesPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SocialFeed } from '../components/SocialFeed';
 import { StreakWidget } from '../components/StreakWidget';

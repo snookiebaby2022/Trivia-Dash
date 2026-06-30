@@ -43,7 +43,7 @@ const HIGHLIGHT_META: Record<
 > = {
   clutch_correct: {
     label: 'Clutch King',
-    emoji: ' clutch ',
+    emoji: '🔥',
     description: 'Pulled off a correct answer under 3 seconds',
   },
   speed_demon: {

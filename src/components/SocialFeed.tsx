@@ -2,72 +2,14 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../context/ThemeContext';
+import { getSocialFeed, getOnlineFriendsCount, type FeedItem } from '../lib/socialFeed';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
 
-interface FeedItem {
-  id: string;
-  playerName: string;
-  avatarEmoji: string;
-  avatarColor: string;
-  message: string;
-  timestamp: number;
-  actionLabel?: string;
-  onAction?: () => void;
-}
-
 interface Props {
   limit?: number;
+  onItemPress?: (item: FeedItem) => void;
 }
-
-const MOCK_FEED: FeedItem[] = [
-  {
-    id: '1',
-    playerName: 'Alex',
-    avatarEmoji: '🦊',
-    avatarColor: '#FF6B4A',
-    message: 'just hit a 10-streak in Pop Culture!',
-    timestamp: Date.now() - 120_000,
-    actionLabel: 'Challenge',
-    onAction: () => {},
-  },
-  {
-    id: '2',
-    playerName: 'Jordan',
-    avatarEmoji: '🦉',
-    avatarColor: '#7C5CFF',
-    message: 'earned the Science Master badge',
-    timestamp: Date.now() - 3_600_000,
-  },
-  {
-    id: '3',
-    playerName: 'Sam',
-    avatarEmoji: '🐸',
-    avatarColor: '#3DDC97',
-    message: 'won a ranked match — now Diamond II',
-    timestamp: Date.now() - 7_200_000,
-    actionLabel: 'View',
-    onAction: () => {},
-  },
-  {
-    id: '4',
-    playerName: 'Riley',
-    avatarEmoji: '🦁',
-    avatarColor: '#FFC44D',
-    message: 'completed the daily challenge in 42s',
-    timestamp: Date.now() - 86_400_000,
-  },
-  {
-    id: '5',
-    playerName: 'Casey',
-    avatarEmoji: '🐙',
-    avatarColor: '#FF5C8A',
-    message: 'unlocked the Gold avatar frame',
-    timestamp: Date.now() - 172_800_000,
-    actionLabel: 'See profile',
-    onAction: () => {},
-  },
-];
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -104,10 +46,12 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
     ]).start();
   }, []);
 
+  const { emoji, color } = item.playerAvatar;
+
   return (
     <Animated.View style={[styles.row, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
-        <Text style={styles.avatarEmoji}>{item.avatarEmoji}</Text>
+      <View style={[styles.avatar, { backgroundColor: color }]}>
+        <Text style={styles.avatarEmoji}>{emoji}</Text>
       </View>
       <View style={styles.body}>
         <Text style={styles.text} numberOfLines={2}>
@@ -117,7 +61,7 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
         <Text style={styles.time}>{relativeTime(item.timestamp)}</Text>
       </View>
       {item.actionLabel && (
-        <Pressable style={styles.actionBtn} onPress={item.onAction}>
+        <Pressable style={styles.actionBtn} onPress={() => {}}>
           <Text style={styles.actionLabel}>{item.actionLabel}</Text>
         </Pressable>
       )}
@@ -128,8 +72,8 @@ function FeedRow({ item, index }: { item: FeedItem; index: number }) {
 export function SocialFeed({ limit = 5 }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeItemStyles(colors), [colors]);
-  const onlineCount = 3;
-  const data = MOCK_FEED.slice(0, limit);
+  const onlineCount = getOnlineFriendsCount();
+  const data = useMemo(() => getSocialFeed(limit), [limit]);
 
   if (!data.length) {
     return (

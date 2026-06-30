@@ -12,7 +12,9 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { initAudio } from './src/lib/audio';
 import { initAnalytics } from './src/lib/analytics';
 import { initFriends } from './src/lib/friends';
-import { initOfflineSync } from './src/lib/offlineSync';
+import { initSoundPacks } from './src/lib/soundPacks';
+import { initSocialFeed } from './src/lib/socialFeed';
+import { initNichePacks } from './src/lib/nichePacks';
 import type { RootStackParamList } from './src/navigation';
 import { AchievementWallScreen } from './src/screens/AchievementWallScreen';
 import { GameScreen } from './src/screens/GameScreen';
@@ -157,6 +159,9 @@ export default function App() {
     void initAudio();
     void initAnalytics();
     void initFriends();
+    void initSoundPacks();
+    void initSocialFeed();
+    void initNichePacks();
   }, []);
 
   return (

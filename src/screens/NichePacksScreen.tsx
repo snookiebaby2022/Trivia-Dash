@@ -6,6 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
+import {
+  getAllNichePacks,
+  getPopularNichePacks,
+  getNewNichePacks,
+  getFreeNichePacks,
+  getPackCategories,
+  type NichePack,
+} from '../lib/nichePacks';
 import type { RootStackParamList } from '../navigation';
 import type { ThemeColors } from '../theme';
 import { font, radius, spacing } from '../theme';
@@ -14,43 +22,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'NichePacks'>;
 
 type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed';
 
-interface NichePack {
-  id: string;
-  title: string;
-  subtitle: string;
-  emoji: string;
-  category: string;
-  difficulty: Difficulty;
-  playerCount: number;
-  avgScore: number;
-  tier: 'free' | 'pro';
-  isPopular: boolean;
-  isNew: boolean;
-}
-
 const DIFFICULTY_COLORS: Record<Difficulty, string> = {
   easy: '#3DDC97',
   medium: '#FFC44D',
   hard: '#FF5470',
   mixed: '#8A8AA8',
 };
-
-const CATEGORIES = ['All', 'Anime', 'K-Pop', 'Marvel', 'Star Wars', 'Harry Potter', 'Gaming', 'Disney', 'Taylor Swift', 'NFL', 'NBA', 'True Crime'];
-
-const MOCK_PACKS: NichePack[] = [
-  { id: 'pk1', title: 'Dragon Ball Legends', subtitle: 'Test your Saiyan knowledge', emoji: '\u{1F4AB}', category: 'Anime', difficulty: 'hard', playerCount: 3420, avgScore: 68, tier: 'free', isPopular: true, isNew: false },
-  { id: 'pk2', title: 'BTS Deep Cuts', subtitle: 'Only true ARMYs will ace this', emoji: '\u{1F49C}', category: 'K-Pop', difficulty: 'medium', playerCount: 2840, avgScore: 72, tier: 'free', isPopular: true, isNew: false },
-  { id: 'pk3', title: 'MCU Phase 4-5', subtitle: 'Multiverse saga mastery', emoji: '\u{1F9E9}', category: 'Marvel', difficulty: 'hard', playerCount: 5100, avgScore: 61, tier: 'free', isPopular: true, isNew: false },
-  { id: 'pk4', title: 'Sith Lords', subtitle: 'The dark side of the Force', emoji: '\u{2694}\u{FE0F}', category: 'Star Wars', difficulty: 'medium', playerCount: 1980, avgScore: 74, tier: 'pro', isPopular: false, isNew: false },
-  { id: 'pk5', title: 'Hogwarts Houses', subtitle: 'Which traits do you know?', emoji: '\u{1F9F9}', category: 'Harry Potter', difficulty: 'easy', playerCount: 4200, avgScore: 81, tier: 'free', isPopular: true, isNew: false },
-  { id: 'pk6', title: 'Speedrun Trivia', subtitle: 'Gaming history at lightspeed', emoji: '\u{1F3AE}', category: 'Gaming', difficulty: 'mixed', playerCount: 1560, avgScore: 65, tier: 'free', isPopular: false, isNew: true },
-  { id: 'pk7', title: 'Disney Villains', subtitle: 'Know your antagonists', emoji: '\u{1F47E}', category: 'Disney', difficulty: 'medium', playerCount: 2200, avgScore: 70, tier: 'pro', isPopular: false, isNew: false },
-  { id: 'pk8', title: 'Eras Tour Quiz', subtitle: 'Swiftie status: verified?', emoji: '\u{2728}', category: 'Taylor Swift', difficulty: 'hard', playerCount: 3800, avgScore: 66, tier: 'pro', isPopular: true, isNew: false },
-  { id: 'pk9', title: 'NFL Legends', subtitle: 'Gridiron greatness', emoji: '\u{1F3C8}', category: 'NFL', difficulty: 'medium', playerCount: 1740, avgScore: 71, tier: 'free', isPopular: false, isNew: true },
-  { id: 'pk10', title: 'NBA Dynasties', subtitle: 'Championship legacies', emoji: '\u{1F3C0}', category: 'NBA', difficulty: 'hard', playerCount: 1320, avgScore: 59, tier: 'free', isPopular: false, isNew: true },
-  { id: 'pk11', title: 'Cold Case Files', subtitle: 'Crack the unsolved', emoji: '\u{1F50D}', category: 'True Crime', difficulty: 'hard', playerCount: 2680, avgScore: 54, tier: 'pro', isPopular: false, isNew: false },
-  { id: 'pk12', title: 'One Piece Odyssey', subtitle: 'Grand Line knowledge test', emoji: '\u{1F3F4}\u{200D}\u{2620}\u{FE0F}', category: 'Anime', difficulty: 'mixed', playerCount: 980, avgScore: 63, tier: 'pro', isPopular: false, isNew: true },
-];
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
@@ -64,16 +41,20 @@ export function NichePacksScreen({ navigation }: Props) {
 
   const [filter, setFilter] = useState<'all' | 'free' | 'popular' | 'new'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [packs] = useState<NichePack[]>(MOCK_PACKS);
+
+  const allPacks = useMemo(() => getAllNichePacks(), []);
+  const popularIds = useMemo(() => new Set(getPopularNichePacks().map((p) => p.id)), []);
+  const newIds = useMemo(() => new Set(getNewNichePacks().map((p) => p.id)), []);
+  const categoryNames = useMemo(() => ['All', ...getPackCategories().map((c) => c.label)], []);
 
   const filteredPacks = useMemo(() => {
-    let result = packs;
-    if (filter === 'free') result = result.filter((p) => p.tier === 'free');
-    if (filter === 'popular') result = result.filter((p) => p.isPopular);
-    if (filter === 'new') result = result.filter((p) => p.isNew);
-    if (selectedCategory !== 'All') result = result.filter((p) => p.category === selectedCategory);
+    let result = allPacks;
+    if (filter === 'free') result = getFreeNichePacks();
+    if (filter === 'popular') result = allPacks.filter((p) => popularIds.has(p.id));
+    if (filter === 'new') result = allPacks.filter((p) => newIds.has(p.id));
+    if (selectedCategory !== 'All') result = result.filter((p) => String(p.category) === selectedCategory);
     return result;
-  }, [packs, filter, selectedCategory]);
+  }, [allPacks, filter, selectedCategory, popularIds, newIds]);
 
   const playPack = (pack: NichePack) => {
     if (pack.tier === 'pro' && !profile?.isPro) {
@@ -82,7 +63,7 @@ export function NichePacksScreen({ navigation }: Props) {
     }
     navigation.navigate('Game', {
       mode: 'solo',
-      category: pack.category as any,
+      category: pack.category,
     });
   };
 
@@ -110,7 +91,7 @@ export function NichePacksScreen({ navigation }: Props) {
         </ScrollView>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-          {CATEGORIES.map((cat) => (
+          {categoryNames.map((cat) => (
             <Pressable
               key={cat}
               style={[
